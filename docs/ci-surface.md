@@ -35,6 +35,8 @@ CI visibility values are `complete`, `partial`, and `unavailable`.
 
 `missing` means GitHub returned no CI records from both surfaces successfully. `unavailable` means MergeSignal could not observe either CI surface and must not claim CI is absent.
 
+The review-signal engine consumes these normalized values directly. It may emit CI signals for failing, pending, missing, unavailable, partial, or unknown observed outcomes, but it does not infer required checks or merge readiness.
+
 ## Partial Failures
 
 Authentication failure and rate limiting remain global snapshot failures. Access denied, temporary unavailability, invalid CI responses, and pagination safety failures for one CI source can produce a successful snapshot with partial or unavailable CI visibility and warnings.

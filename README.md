@@ -1,8 +1,8 @@
 # MergeSignal
 
-MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, read-only CI visibility for the pull-request head SHA, and deterministic changed-file classification.
+MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, read-only CI visibility for the pull-request head SHA, deterministic changed-file classification, and deterministic review-signal detection.
 
-The pull-request analysis engine is intentionally not implemented yet.
+Risk scoring, evidence confidence, and merge-readiness decisions are intentionally not implemented yet.
 
 ## Repository Layout
 
@@ -45,7 +45,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/parse \
   -d '{"url":"https://github.com/octocat/Hello-World/pull/1347?tab=files#discussion"}'
 ```
 
-Fetch a public GitHub PR snapshot, including current head-SHA CI visibility:
+Fetch a public GitHub PR snapshot, including current head-SHA CI visibility and review signals:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/snapshot \
@@ -98,6 +98,7 @@ npm audit --audit-level=moderate
 - [GitHub integration](docs/github-integration.md)
 - [CI surface](docs/ci-surface.md)
 - [File classification](docs/file-classification.md)
+- [Review signals](docs/review-signals.md)
 
 ## Environment Configuration
 
@@ -123,6 +124,6 @@ See `backend/.env.example` and `frontend/.env.example` for local defaults.
 
 ## Current Status
 
-Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, retrieval of public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, and deterministic path-based file classification. The next planned milestone is signal detection.
+Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, retrieval of public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, deterministic path-based file classification, and deterministic review-signal detection. Snapshot responses now include `signals` and `signal_summary`.
 
-This foundation does not include required-check inference, pull-request analysis, merge risk scoring, evidence confidence scoring, generated fixes, generic AI code-review commentary, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.
+This foundation does not include required-check inference, merge risk scoring, evidence confidence scoring, merge-readiness decisions, generated fixes, generic AI code-review commentary, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.

@@ -43,6 +43,7 @@ from app.integrations.github.models import (
 from app.integrations.github.pagination import parse_next_link
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
+from app.signals.engine import analyze_snapshot_signals
 
 SleepCallable = Callable[[float], Awaitable[None]]
 
@@ -208,7 +209,7 @@ class GitHubRestClient:
         ci = await self.get_pull_request_ci(reference, metadata.head_sha)
         completeness = self._build_completeness(metadata, files, commits)
 
-        return PullRequestSnapshot(
+        snapshot = PullRequestSnapshot(
             reference=reference,
             metadata=metadata,
             files=files,
@@ -218,6 +219,13 @@ class GitHubRestClient:
             completeness=completeness,
             fetched_at=datetime.now(UTC),
             rate_limit=self._latest_rate_limit,
+        )
+        signal_result = analyze_snapshot_signals(snapshot)
+        return snapshot.model_copy(
+            update={
+                "signals": signal_result.signals,
+                "signal_summary": signal_result.summary,
+            }
         )
 
     def _headers(self) -> dict[str, str]:

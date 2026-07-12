@@ -8,7 +8,7 @@ Pull requests can look easy to merge while still carrying hidden risk: sensitive
 
 The first version will analyze public GitHub pull requests using repository metadata, changed files, CODEOWNERS, branch and review policies, status checks, and explicit evidence available through supported GitHub surfaces. It will produce separate merge risk and evidence confidence outputs so teams can distinguish likely implementation risk from the strength of the supporting evidence.
 
-The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, GitHub REST retrieval for public pull-request metadata, changed files, commits, read-only CI visibility, and deterministic path-based changed-file classification. It does not implement signal detection or pull-request analysis.
+The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, GitHub REST retrieval for public pull-request metadata, changed files, commits, read-only CI visibility, deterministic path-based changed-file classification, and deterministic review-signal detection. It does not implement merge risk scoring, evidence confidence, or merge-readiness decisions.
 
 ## Non-Goals
 
@@ -37,7 +37,7 @@ The current implementation includes the project foundation, deterministic public
 3. GitHub data ingestion: public pull-request metadata, changed files, and commits.
 4. Read-only CI collection: check runs and commit statuses for the current pull-request head SHA.
 5. Deterministic file classification: primary file kind, functional areas, languages, renamed-path classification, matched rule evidence, warnings, and summary counts.
-6. Signal detection: deterministic rules for changed-file sensitivity, policy gaps, review coverage, and test/check evidence.
+6. Signal detection: deterministic rules for changed-file sensitivity, review evidence, CI visibility, dependency changes, migration hints, patch-level review hints, rename transitions, and completeness gaps.
 7. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
 8. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
 9. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.

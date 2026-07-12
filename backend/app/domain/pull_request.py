@@ -9,6 +9,7 @@ from app.domain.file_classification import (
     FileKind,
     FileLanguage,
 )
+from app.domain.review_signal import ReviewSignal, ReviewSignalSummary
 
 
 class StrictDomainModel(BaseModel):
@@ -43,6 +44,21 @@ def unknown_file_classification() -> FileClassification:
         language=FileLanguage.UNKNOWN,
         matches=[],
         warnings=["No explicit file-kind rule matched.", "No explicit language rule matched."],
+    )
+
+
+def empty_signal_summary() -> ReviewSignalSummary:
+    return ReviewSignalSummary(
+        total_signals=0,
+        counts_by_severity=[],
+        counts_by_category=[],
+        files_with_signals=[],
+        high_attention_files=[],
+        patch_based_signal_count=0,
+        metadata_signal_count=0,
+        ci_signal_count=0,
+        warnings=[],
+        rules_version="v1",
     )
 
 
@@ -187,6 +203,14 @@ class PullRequestSnapshot(StrictDomainModel):
     ci: PullRequestCi = Field(description="Read-only CI visibility for the pull-request head SHA.")
     classification_summary: FileClassificationSummary = Field(
         description="Pull-request-level summary of changed-file classifications."
+    )
+    signals: list[ReviewSignal] = Field(
+        default_factory=list,
+        description="Deterministic review signals observed from the snapshot data.",
+    )
+    signal_summary: ReviewSignalSummary = Field(
+        default_factory=empty_signal_summary,
+        description="Pull-request-level summary of review signals.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

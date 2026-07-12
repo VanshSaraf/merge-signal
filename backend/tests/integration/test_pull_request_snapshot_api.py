@@ -33,6 +33,7 @@ from app.errors import (
 )
 from app.main import create_app
 from app.services.file_classifier import classify_changed_files
+from app.signals.engine import analyze_snapshot_signals
 
 
 def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
@@ -59,7 +60,7 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
         ),
     ]
     classified_files, classification_summary = classify_changed_files(files)
-    return PullRequestSnapshot(
+    snapshot = PullRequestSnapshot(
         reference=reference,
         metadata=PullRequestMetadata(
             number=reference.pull_number,
@@ -187,6 +188,8 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
             reset_at=datetime(2026, 7, 3, 11, 0, tzinfo=UTC),
         ),
     )
+    signal_result = analyze_snapshot_signals(snapshot)
+    return snapshot.model_copy(update={"signals": signal_result.signals, "signal_summary": signal_result.summary})
 
 
 class FakeGitHubClient:
@@ -251,6 +254,29 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["classification_summary"]["files_without_patch"] == 1
     assert {"name": "source", "count": 1} in data["classification_summary"]["counts_by_kind"]
     assert {"name": "documentation", "count": 1} in data["classification_summary"]["counts_by_kind"]
+    assert "signals" in data
+    assert "signal_summary" in data
+    signal_ids = [signal["rule_id"] for signal in data["signals"]]
+    assert "metadata.missing_description" in signal_ids
+    assert "testing.production_change_without_test_files" in signal_ids
+    assert "completeness.patch_coverage_incomplete" in signal_ids
+    first_signal = data["signals"][0]
+    assert set(first_signal) == {
+        "id",
+        "rule_id",
+        "title",
+        "description",
+        "category",
+        "severity",
+        "scope",
+        "affected_files",
+        "evidence",
+        "limitations",
+        "tags",
+    }
+    assert data["signal_summary"]["total_signals"] == len(data["signals"])
+    assert data["signal_summary"]["rules_version"] == "v1"
+    assert "backend/app/main.py" in data["signal_summary"]["files_with_signals"]
     assert [commit["sha"] for commit in data["commits"]] == ["commit-one", "commit-two"]
     assert data["ci"]["state"] == "passing"
     assert data["ci"]["visibility"] == "complete"
@@ -259,6 +285,7 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert "risk_score" not in data
     assert "evidence_confidence" not in data
     assert "merge_decision" not in data
+    assert "blockers" not in data
     assert "recommendations" not in data
     assert "ranked_files" not in data
     assert data["completeness"]["missing_patch_count"] == 1
@@ -410,5 +437,12 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "FileKind" in schemas
     assert "FileArea" in schemas
     assert "FileLanguage" in schemas
+    assert "ReviewSignal" in schemas
+    assert "SignalEvidence" in schemas
+    assert "ReviewSignalSummary" in schemas
+    assert "SignalSeverity" in schemas
+    assert "SignalCategory" in schemas
+    assert "SignalScope" in schemas
+    assert "EvidenceKind" in schemas
     assert "FetchPullRequestSnapshotRequest" in schemas
     assert "FetchPullRequestSnapshotResponse" in schemas

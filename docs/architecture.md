@@ -14,6 +14,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/api/v1/` owns versioned API routes.
 - `app/domain/` contains domain models that do not depend on FastAPI route code.
 - `app/services/` contains application services such as PR URL parsing, CI aggregation, and file classification.
+- `app/signals/` contains deterministic review-signal rules, patch scanning, aggregation, and summary generation.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -34,19 +35,29 @@ HTTP request
 -> commit retrieval
 -> current head SHA from pull-request metadata
 -> check-run and commit-status retrieval for that head SHA
+-> deterministic review-signal engine
+-> signal aggregation and summary generation
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, decisions, signals, or recommendations.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, merge decisions, recommendations, or file ranking.
 
 ## File Classification Service
 
 The file classifier lives in `app/services/file_classifier.py` with rule data isolated in `app/services/file_classification_rules.py`. It accepts repository path strings from normalized changed files, returns strict domain models, and does not access the filesystem, network, repository contents, or local dependencies.
 
 Classification output includes primary file kind, functional areas, language, matched rule evidence, safe warnings, previous-path classification for renames, and a pull-request-level summary. This is snapshot metadata only; it is not a merge-readiness decision or risk score.
+
+## Review Signal Engine
+
+The signal engine lives under `app/signals/`. Rule metadata and thresholds are centralized in `rules.py`; `patch_scanner.py` parses bounded GitHub patch strings; `engine.py` evaluates snapshot, file, CI, dependency, rename, completeness, and patch-level rules; `summary.py` builds deterministic counts.
+
+The engine is pure application logic. It depends on typed snapshot models, does not depend on FastAPI or HTTPX, does not access the filesystem, does not access the network, does not mutate the input snapshot, and never fetches additional repository content. Patch evidence is sanitized so credential-like literal values and full suspicious source lines are not returned.
+
+Signals are aggregated by stable rule ID. Affected files and evidence are deduplicated and sorted before serialization. The summary reports counts and high-attention files, but it is not a file ranking and does not include any numerical risk score.
 
 ## Parser Service
 
@@ -93,7 +104,7 @@ GitHub integration code may depend on settings, transport models, domain models,
 
 The parse endpoint treats the incoming URL as untrusted input. It does not trim, repair, fetch, clone, execute, or install anything from the referenced repository.
 
-The snapshot endpoint may fetch public data from the configured GitHub REST API host after parsing succeeds. It does not clone repositories, execute repository code, install dependencies, inspect repository files from disk, or follow pagination links to unrelated hosts.
+The snapshot endpoint may fetch public data from the configured GitHub REST API host after parsing succeeds. It does not clone repositories, execute repository code, install dependencies, inspect repository files from disk, send patches to external services, or follow pagination links to unrelated hosts.
 
 ## Frontend
 
@@ -114,7 +125,6 @@ Backend configuration is loaded with Pydantic settings using the `MERGE_SIGNAL_`
 
 Planned backend areas:
 
-- Signal detection.
 - Repository policy parsing.
 - CODEOWNERS evaluation.
 - Risk signal calculation.

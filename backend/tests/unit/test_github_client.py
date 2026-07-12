@@ -554,6 +554,10 @@ def test_snapshot_fetches_ci_after_core_using_head_sha_and_latest_rate_limit() -
     assert snapshot.classification_summary.total_files == 3
     assert snapshot.classification_summary.renamed_files == 1
     assert snapshot.classification_summary.files_with_previous_classification == 1
+    assert snapshot.signals
+    assert snapshot.signal_summary.total_signals == len(snapshot.signals)
+    assert "metadata.missing_description" in [signal.rule_id for signal in snapshot.signals]
+    assert "backend/app/main.py" in snapshot.signal_summary.files_with_signals
     assert snapshot.rate_limit.remaining == 4995
     assert snapshot.ci.rate_limit is not None
     assert snapshot.ci.rate_limit.remaining == 4995

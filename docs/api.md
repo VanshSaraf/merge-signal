@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, or merge-readiness decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, ranking, or merge-readiness decisions.
 
 Request:
 
@@ -204,6 +204,41 @@ Compact success response:
       "files_without_patch": 0,
       "warnings": []
     },
+    "signals": [
+      {
+        "id": "metadata.missing_description",
+        "rule_id": "metadata.missing_description",
+        "title": "Pull request description is missing",
+        "description": "The pull-request body is empty after trimming.",
+        "category": "metadata",
+        "severity": "low",
+        "scope": "pull_request",
+        "affected_files": [],
+        "evidence": [
+          {
+            "kind": "metadata",
+            "message": "Pull-request body is empty.",
+            "file": null,
+            "observed_value": "missing_description",
+            "expected_context": null
+          }
+        ],
+        "limitations": ["A missing description does not imply the implementation is incorrect."],
+        "tags": ["description", "metadata"]
+      }
+    ],
+    "signal_summary": {
+      "total_signals": 1,
+      "counts_by_severity": [{"name": "low", "count": 1}],
+      "counts_by_category": [{"name": "metadata", "count": 1}],
+      "files_with_signals": [],
+      "high_attention_files": [],
+      "patch_based_signal_count": 0,
+      "metadata_signal_count": 1,
+      "ci_signal_count": 0,
+      "warnings": [],
+      "rules_version": "v1"
+    },
     "completeness": {
       "files_complete": true,
       "commits_complete": true,
@@ -252,6 +287,8 @@ Snapshot components:
 - `commits`: commits in GitHub order.
 - `ci`: check runs, current commit statuses, aggregate CI state, visibility, counts, warnings, and CI completeness.
 - `classification_summary`: counts and warnings across changed-file classifications.
+- `signals`: deterministic review signals derived from snapshot data.
+- `signal_summary`: counts and warnings across emitted review signals.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 
@@ -262,6 +299,12 @@ File kind values are `source`, `test`, `documentation`, `configuration`, `depend
 File area values are `frontend`, `backend`, `api`, `authentication`, `authorization`, `database`, `dependencies`, `ci_cd`, `infrastructure`, `testing`, `documentation`, `configuration`, `generated`, `security`, and `build_tooling`.
 
 File language values are `python`, `javascript`, `typescript`, `java`, `c`, `cpp`, `csharp`, `go`, `rust`, `ruby`, `php`, `kotlin`, `swift`, `scala`, `sql`, `shell`, `powershell`, `html`, `css`, `scss`, `less`, `json`, `yaml`, `toml`, `xml`, `markdown`, `dockerfile`, `terraform`, `protobuf`, `graphql`, and `unknown`.
+
+Signal severity values are `info`, `low`, `medium`, and `high`. Signal category values are `metadata`, `change_scope`, `testing`, `ci`, `authentication`, `authorization`, `database`, `dependencies`, `api`, `infrastructure`, `configuration`, `security`, `code_quality`, `generated_content`, `rename`, and `completeness`. Signal scope values are `pull_request`, `file_set`, `file`, `ci_surface`, and `snapshot`.
+
+Signal evidence kinds are `metadata`, `file_path`, `file_count`, `line_count`, `classification`, `ci_state`, `ci_visibility`, `patch_pattern`, `rename_transition`, `completeness`, and `commit_count`.
+
+Review signals are ordered deterministically by severity, category, rule ID, and signal ID. Affected files and evidence are deduplicated and sorted. Credential-like patch evidence never returns suspected literal values or full source lines.
 
 Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
 
@@ -300,3 +343,4 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 - No CODEOWNERS parsing.
 - No required-check inference.
 - No merge risk or evidence confidence calculation yet.
+- No merge decision, recommendation, blocker field, or file ranking.

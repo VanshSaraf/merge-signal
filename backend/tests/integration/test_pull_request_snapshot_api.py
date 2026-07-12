@@ -31,6 +31,7 @@ from app.errors import (
     GitHubUnavailableError,
     INVALID_PULL_REQUEST_URL,
 )
+from app.file_priority import calculate_file_priorities
 from app.main import create_app
 from app.readiness import calculate_merge_readiness
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
@@ -198,7 +199,14 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
             "evidence_confidence": calculate_evidence_confidence(snapshot),
         }
     )
-    return snapshot.model_copy(update={"merge_readiness": calculate_merge_readiness(snapshot)})
+    snapshot = snapshot.model_copy(update={"merge_readiness": calculate_merge_readiness(snapshot)})
+    ranked_files, file_priority_summary = calculate_file_priorities(snapshot)
+    return snapshot.model_copy(
+        update={
+            "ranked_files": ranked_files,
+            "file_priority_summary": file_priority_summary,
+        }
+    )
 
 
 class FakeGitHubClient:
@@ -331,11 +339,21 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["merge_readiness"]["caution_reason_count"] == 1
     assert data["merge_readiness"]["context_reason_count"] == 0
     assert data["merge_readiness"]["rules_version"] == "v1"
+    assert "ranked_files" in data
+    assert "file_priority_summary" in data
+    assert [file["rank"] for file in data["ranked_files"]] == [1, 2]
+    assert {file["path"] for file in data["ranked_files"]} == {"backend/app/main.py", "docs/old.md"}
+    assert data["ranked_files"][0]["score"] >= data["ranked_files"][1]["score"]
+    assert data["ranked_files"][0]["level"] in {"low", "medium", "high", "very_high"}
+    assert data["file_priority_summary"]["total_files"] == 2
+    assert data["file_priority_summary"]["rules_version"] == "v1"
+    assert len(data["file_priority_summary"]["highest_priority_files"]) == 2
     assert "risk_score" not in data
     assert "merge_decision" not in data
     assert "blockers" not in data
     assert "recommendations" not in data
-    assert "ranked_files" not in data
+    assert "reviewers" not in data
+    assert "required_reviewers" not in data
     assert data["completeness"]["missing_patch_count"] == 1
     assert data["rate_limit"]["remaining"] == 4998
     assert fake.references[0].canonical_url == "https://github.com/octocat/Hello-World/pull/42"
@@ -497,6 +515,11 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "DecisionReason" in schemas
     assert "MergeReadinessDecision" in schemas
     assert "DecisionEffect" in schemas
+    assert "RankedFile" in schemas
+    assert "FilePriorityFactor" in schemas
+    assert "FilePrioritySummary" in schemas
+    assert "FilePriorityCount" in schemas
+    assert "FilePriorityLevel" in schemas
     assert "MergeRiskLevel" in schemas
     assert "EvidenceConfidenceLevel" in schemas
     assert "RiskGroup" in schemas
@@ -509,6 +532,6 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "FetchPullRequestSnapshotResponse" in schemas
     assert "merge_decision" not in str(document)
     assert "recommendations" not in str(document)
-    assert "ranked_files" not in str(document)
-    assert "file_priority" not in str(document)
+    assert "required_reviewers" not in str(document)
+    assert "reviewer_suggestions" not in str(document)
     assert "approval_state" not in str(document)

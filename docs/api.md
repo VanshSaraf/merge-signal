@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, and returns a normalized snapshot. This endpoint does not perform required-check inference, recommendations, reviewer suggestions, file ranking, CODEOWNERS evaluation, or approval-state decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, and returns a normalized snapshot. This endpoint does not perform required-check inference, recommendations, reviewer suggestions, CODEOWNERS evaluation, repository policy evaluation, or approval-state decisions.
 
 Request:
 
@@ -301,6 +301,34 @@ Compact success response:
       "rules_version": "v1",
       "limitations": ["A readiness decision is a deterministic heuristic, not proof of correctness."]
     },
+    "ranked_files": [
+      {
+        "rank": 1,
+        "path": "backend/app/main.py",
+        "previous_path": null,
+        "status": "modified",
+        "score": 0,
+        "level": "low",
+        "primary_kind": "source",
+        "areas": ["backend"],
+        "language": "python",
+        "changes": 6,
+        "additions": 5,
+        "deletions": 1,
+        "related_signal_ids": [],
+        "factors": [],
+        "limitations": ["Review priority is a deterministic review-ordering heuristic, not a probability or defect score."]
+      }
+    ],
+    "file_priority_summary": {
+      "total_files": 1,
+      "counts_by_level": [{"name": "low", "count": 1}],
+      "highest_priority_files": ["backend/app/main.py"],
+      "files_with_signal_factors": 0,
+      "files_with_limited_patch_visibility": 0,
+      "rules_version": "v1",
+      "limitations": ["Review priority is a deterministic ordering heuristic, not merge risk."]
+    },
     "completeness": {
       "files_complete": true,
       "commits_complete": true,
@@ -354,6 +382,8 @@ Snapshot components:
 - `merge_risk`: deterministic merge-risk assessment derived from scoring review signals.
 - `evidence_confidence`: deterministic evidence-confidence assessment derived from snapshot visibility.
 - `merge_readiness`: deterministic merge-readiness assessment derived from normalized snapshot state, review signals, merge risk, and evidence confidence.
+- `ranked_files`: every changed file once, ordered by deterministic review priority.
+- `file_priority_summary`: counts and limitations for deterministic changed-file review priorities.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 
@@ -389,7 +419,13 @@ Merge-readiness decisions are `ready`, `ready_with_caution`, `not_ready`, and `b
 
 Readiness rules version is `v1`. Full rule behavior, precedence, suppression, and representative scenarios are documented in [Merge readiness](merge-readiness.md).
 
-The snapshot response intentionally does not include recommendations, ranked files, file priority, required reviewers, reviewer suggestions, CODEOWNERS results, repository policy results, approval state, generated fixes, or probability claims.
+File priority levels are `low`, `medium`, `high`, and `very_high`. Score bounds are 0-100. Level thresholds are 0-19 low, 20-39 medium, 40-69 high, and 70-100 very high.
+
+`RankedFile` includes `rank`, `path`, `previous_path`, `status`, `score`, `level`, `primary_kind`, `areas`, `language`, `changes`, `additions`, `deletions`, `related_signal_ids`, `factors`, and `limitations`. `FilePriorityFactor` includes `id`, `category`, `points`, `description`, `related_signal_ids`, and `observed_value`.
+
+File prioritization rules version is `v1`. Full factor groups, caps, ordering, and non-goals are documented in [File prioritization](file-prioritization.md).
+
+The snapshot response intentionally does not include recommendations, required reviewers, reviewer suggestions, CODEOWNERS results, repository policy results, approval state, generated fixes, or probability claims.
 
 Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
 
@@ -427,4 +463,4 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 - No GitHub Enterprise support.
 - No CODEOWNERS parsing.
 - No required-check inference.
-- No recommendation engine, reviewer suggestion, approval state, generated fix, or file ranking.
+- No recommendation engine, reviewer suggestion, approval state, generated fix, CODEOWNERS evaluation, or repository policy evaluation.

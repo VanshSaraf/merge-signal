@@ -54,13 +54,13 @@ Evidence confidence uses classification coverage as one visibility component. A 
 ## Non-Goals
 
 - No merge decision.
-- No file ranking.
+- No merge-risk, readiness, or recommendation decision.
 - No generated review commentary.
 - No repository checkout, file-content inspection, arbitrary execution, or dependency installation.
 - No claim that a recognized file kind proves a change is safe or unsafe.
 
 ## Future Use
 
-The classification output feeds deterministic review-signal detection, merge-risk scoring, and evidence-confidence scoring today. It is intended to feed later CODEOWNERS and policy evaluation and changed-file prioritization. Later stages should consume the classification evidence instead of duplicating path heuristics inside route handlers.
+The classification output feeds deterministic review-signal detection, merge-risk scoring, evidence-confidence scoring, merge-readiness decisions, and changed-file prioritization today. It is intended to feed later CODEOWNERS and policy evaluation. Later stages should consume the classification evidence instead of duplicating path heuristics inside route handlers.
 
 The current review-signal engine consumes file kind, functional areas, language, matched rename classifications, and missing-patch context as snapshot evidence. Classification remains descriptive metadata; signals do not reinterpret classification as proof that a change is safe or unsafe.

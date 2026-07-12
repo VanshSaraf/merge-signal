@@ -1,8 +1,8 @@
 # MergeSignal
 
-MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, read-only CI visibility for the pull-request head SHA, deterministic changed-file classification, deterministic review-signal detection, explainable merge-risk scoring, separate evidence-confidence scoring, and deterministic merge-readiness decisions.
+MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, read-only CI visibility for the pull-request head SHA, deterministic changed-file classification, deterministic review-signal detection, explainable merge-risk scoring, separate evidence-confidence scoring, deterministic merge-readiness decisions, and deterministic changed-file review prioritization.
 
-Merge risk, evidence confidence, and merge readiness are separate deterministic outputs. MergeSignal does not currently generate recommendations, rank files, suggest reviewers, or claim that a pull request is safe or correct.
+Merge risk, evidence confidence, merge readiness, and file priority are separate deterministic outputs. MergeSignal does not currently generate recommendations, suggest reviewers, evaluate CODEOWNERS or repository policies, or claim that a pull request is safe or correct.
 
 ## Repository Layout
 
@@ -45,7 +45,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/parse \
   -d '{"url":"https://github.com/octocat/Hello-World/pull/1347?tab=files#discussion"}'
 ```
 
-Fetch a public GitHub PR snapshot, including current head-SHA CI visibility, review signals, merge risk, evidence confidence, and merge readiness:
+Fetch a public GitHub PR snapshot, including current head-SHA CI visibility, review signals, merge risk, evidence confidence, merge readiness, and ranked changed files:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/snapshot \
@@ -101,6 +101,7 @@ npm audit --audit-level=moderate
 - [Review signals](docs/review-signals.md)
 - [Scoring](docs/scoring.md)
 - [Merge readiness](docs/merge-readiness.md)
+- [File prioritization](docs/file-prioritization.md)
 
 ## Environment Configuration
 
@@ -126,6 +127,6 @@ See `backend/.env.example` and `frontend/.env.example` for local defaults.
 
 ## Current Status
 
-Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, retrieval of public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, deterministic path-based file classification, deterministic review-signal detection, merge-risk assessment, evidence-confidence assessment, and merge-readiness assessment. Snapshot responses now include `signals`, `signal_summary`, `merge_risk`, `evidence_confidence`, and `merge_readiness`.
+Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, retrieval of public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, deterministic path-based file classification, deterministic review-signal detection, merge-risk assessment, evidence-confidence assessment, merge-readiness assessment, and changed-file review prioritization. Snapshot responses now include `signals`, `signal_summary`, `merge_risk`, `evidence_confidence`, `merge_readiness`, `ranked_files`, and `file_priority_summary`.
 
-This foundation does not include required-check inference, file ranking, reviewer suggestions, generated fixes, generic AI code-review commentary, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.
+This foundation does not include required-check inference, reviewer suggestions, CODEOWNERS evaluation, repository policy evaluation, generated fixes, generic AI code-review commentary, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.

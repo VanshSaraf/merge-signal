@@ -9,6 +9,7 @@ from app.domain.file_classification import (
     FileKind,
     FileLanguage,
 )
+from app.domain.file_priority import FilePrioritySummary, RankedFile
 from app.domain.review_signal import ReviewSignal, ReviewSignalSummary
 from app.domain.readiness import (
     DecisionEffect,
@@ -204,6 +205,22 @@ def empty_merge_readiness_assessment() -> MergeReadinessAssessment:
     )
 
 
+def empty_file_priority_summary() -> FilePrioritySummary:
+    return FilePrioritySummary(
+        total_files=0,
+        counts_by_level=[],
+        highest_priority_files=[],
+        files_with_signal_factors=0,
+        files_with_limited_patch_visibility=0,
+        rules_version="v1",
+        limitations=[
+            "Review priority is a deterministic ordering heuristic, not merge risk.",
+            "A high-priority file is not proven defective.",
+            "A low-priority file must not be ignored.",
+        ],
+    )
+
+
 class PullRequestMetadata(StrictDomainModel):
     number: int = Field(description="Pull-request number.")
     title: str = Field(description="Pull-request title.")
@@ -365,6 +382,14 @@ class PullRequestSnapshot(StrictDomainModel):
     merge_readiness: MergeReadinessAssessment = Field(
         default_factory=empty_merge_readiness_assessment,
         description="Deterministic merge-readiness decision derived from normalized snapshot assessments.",
+    )
+    ranked_files: list[RankedFile] = Field(
+        default_factory=list,
+        description="Changed files ordered by deterministic review priority.",
+    )
+    file_priority_summary: FilePrioritySummary = Field(
+        default_factory=empty_file_priority_summary,
+        description="Summary of deterministic changed-file review priorities.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

@@ -248,7 +248,9 @@ Low risk with low confidence:
 
 Snapshot responses include merge readiness as a separate assessment built after merge risk and evidence confidence. Readiness does not change risk scores or confidence scores. See [Merge readiness](merge-readiness.md) for decision rules and precedence.
 
-The snapshot response does not include recommendations, ranked files, required reviewers, approval state, CODEOWNERS results, repository policy results, generated fixes, or probability claims.
+Snapshot responses also include deterministic file priority as a separate changed-file ranking built after readiness. File priority does not change merge risk, evidence confidence, or readiness, and a high-priority file is not proof of a defect. See [File prioritization](file-prioritization.md) for factor groups and ordering.
+
+The snapshot response does not include recommendations, required reviewers, approval state, CODEOWNERS results, repository policy results, generated fixes, or probability claims.
 
 ## Determinism And Boundaries
 
@@ -262,4 +264,4 @@ Tests cover enum serialization, score bounds, invalid point combinations, risk r
 
 ## Future Extension Boundaries
 
-Future milestones may add file prioritization, CODEOWNERS, repository policies, required-check inference, CLI output, polished frontend reporting, or GitHub App publishing. Those features should consume the existing scoring and readiness output through explicit models rather than changing the meaning of merge risk or evidence confidence.
+Future milestones may add CODEOWNERS, repository policies, required-check inference, CLI output, polished frontend reporting, or GitHub App publishing. Those features should consume the existing scoring, readiness, and file-priority output through explicit models rather than changing the meaning of merge risk or evidence confidence.

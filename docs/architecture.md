@@ -17,6 +17,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/signals/` contains deterministic review-signal rules, patch scanning, aggregation, and summary generation.
 - `app/scoring/` contains deterministic merge-risk and evidence-confidence engines, rule weights, group caps, thresholds, and ordering helpers.
 - `app/readiness/` contains deterministic merge-readiness rule metadata, precedence, suppression, and evaluation.
+- `app/file_priority/` contains deterministic changed-file review-priority rules, factor caps, ordering, and summary generation.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -42,13 +43,14 @@ HTTP request
 -> merge-risk engine
 -> evidence-confidence engine
 -> merge-readiness engine
+-> file-priority engine
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include recommendations, required reviewers, approval state, CODEOWNERS results, repository policy results, or file ranking.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include recommendations, required reviewers, approval state, CODEOWNERS results, or repository policy results.
 
 ## File Classification Service
 
@@ -84,6 +86,7 @@ GitHub data
 -> merge-risk engine
 -> evidence-confidence engine
 -> merge-readiness engine
+-> file-priority engine
 -> PullRequestSnapshot response
 ```
 
@@ -93,7 +96,13 @@ There is no circular dependency between signal detection and scoring. Signals re
 
 The readiness engine lives under `app/readiness/` and consumes final in-memory snapshot state, review signals, merge risk, and evidence confidence. It does not recalculate scoring and does not mutate signals, risk contributions, confidence components, CI data, completeness data, or classifications.
 
-The engine returns exactly one decision: `ready`, `ready_with_caution`, `not_ready`, or `blocked`. Rule effects have explicit precedence: block, require resolution, caution, then context. Readiness performs no filesystem access, no network access, no additional GitHub requests, no repository execution, no dependency installation, no recommendations, and no file ranking.
+The engine returns exactly one decision: `ready`, `ready_with_caution`, `not_ready`, or `blocked`. Rule effects have explicit precedence: block, require resolution, caution, then context. Readiness performs no filesystem access, no network access, no additional GitHub requests, no repository execution, no dependency installation, no recommendations, and no file-priority calculation.
+
+## File-Priority Engine
+
+The file-priority engine lives under `app/file_priority/` and consumes the in-memory snapshot after readiness has been calculated. It returns `ranked_files` and `file_priority_summary`, and it does not change classifications, review signals, merge risk, evidence confidence, readiness, CI, or completeness.
+
+File priority is separate from merge risk. It is a deterministic review-ordering heuristic for changed files, not a probability, defect score, recommendation engine, reviewer assignment engine, CODEOWNERS evaluator, or policy evaluator. It performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
 
 ## Parser Service
 
@@ -163,7 +172,7 @@ Planned backend areas:
 
 - Repository policy parsing.
 - CODEOWNERS evaluation.
-- File prioritization and report exploration.
+- Report exploration.
 - Recommended reviewer actions.
 - Report serialization.
 

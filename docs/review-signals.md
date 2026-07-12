@@ -4,11 +4,11 @@
 
 Review signals are deterministic, evidence-backed observations derived from a normalized pull-request snapshot. They help reviewers navigate observable metadata, changed-file classification, CI visibility, and patch-level hints without claiming that a pull request is safe, unsafe, correct, or incorrect.
 
-Signals are not a merge decision and do not prove code correctness. Signals feed merge-risk scoring through an explicit rule-ID weight registry, but signal severity is not automatically converted into risk points. Signals remain independently visible in snapshot responses even when they have zero scoring weight.
+Signals are not a merge decision and do not prove code correctness. Signals feed merge-risk scoring through an explicit rule-ID weight registry, but signal severity is not automatically converted into risk points. Signals can also feed file prioritization only when `affected_files` explicitly includes the current changed-file path. Signals remain independently visible in snapshot responses even when they have zero scoring or priority weight.
 
 Readiness rules also consume selected signals through explicit rule IDs. Signals remain visible independently and are not automatically converted into readiness outcomes by severity alone.
 
-See [Scoring](scoring.md) for merge-risk weights, caps, evidence-confidence components, and score thresholds. See [Merge readiness](merge-readiness.md) for readiness rules and precedence.
+See [Scoring](scoring.md) for merge-risk weights, caps, evidence-confidence components, and score thresholds. See [Merge readiness](merge-readiness.md) for readiness rules and precedence. See [File prioritization](file-prioritization.md) for changed-file ranking factors.
 
 ## Inputs Used
 

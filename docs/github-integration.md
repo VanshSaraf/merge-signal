@@ -2,7 +2,7 @@
 
 ## Current Capabilities
 
-MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser. Changed-file path strings are classified locally after GitHub file data is normalized, deterministic review signals are produced from the completed snapshot, and scoring is calculated from in-memory MergeSignal models.
+MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser. Changed-file path strings are classified locally after GitHub file data is normalized, deterministic review signals are produced from the completed snapshot, scoring is calculated from in-memory MergeSignal models, and merge readiness is calculated from the final normalized snapshot.
 
 Supported input:
 
@@ -10,7 +10,7 @@ Supported input:
 https://github.com/{owner}/{repository}/pull/{pull_number}
 ```
 
-GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, recommendations, file ranking, and merge-readiness decisions are not implemented in this milestone.
+GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, recommendations, file ranking, reviewer suggestions, and approval-state decisions are not implemented in this milestone.
 
 ## Authentication
 
@@ -83,7 +83,7 @@ Malformed or absent rate-limit headers do not fail the request. The snapshot exp
 
 The snapshot reports completeness without claiming analysis. Missing file patches are allowed because GitHub may omit patches for binary or very large files. Missing patches increment `missing_patch_count` and add a warning.
 
-Changed-file classifications are based only on current and previous path strings. Review signals use snapshot metadata, classifications, normalized CI data, completeness data, and GitHub-provided patch strings when available. Scoring uses the resulting signals and snapshot visibility fields. These steps do not require repository checkout, file-content retrieval, additional GitHub requests, or dependency installation.
+Changed-file classifications are based only on current and previous path strings. Review signals use snapshot metadata, classifications, normalized CI data, completeness data, and GitHub-provided patch strings when available. Scoring uses the resulting signals and snapshot visibility fields. Readiness uses the final normalized snapshot, signals, merge risk, and evidence confidence. These steps do not require repository checkout, file-content retrieval, additional GitHub requests, or dependency installation.
 
 Warnings are also added when GitHub reports a changed-file or commit count that differs from the retrieved lists.
 

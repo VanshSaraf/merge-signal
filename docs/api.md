@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, and returns a normalized snapshot. This endpoint does not perform required-check inference, recommendations, ranking, or merge-readiness decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, and returns a normalized snapshot. This endpoint does not perform required-check inference, recommendations, reviewer suggestions, file ranking, CODEOWNERS evaluation, or approval-state decisions.
 
 Request:
 
@@ -278,6 +278,29 @@ Compact success response:
       "rules_version": "v1",
       "limitations": ["Evidence confidence measures visibility and completeness, not code quality."]
     },
+    "merge_readiness": {
+      "decision": "ready",
+      "decisive_rule_id": "readiness.ready_baseline",
+      "reasons": [
+        {
+          "rule_id": "readiness.ready_baseline",
+          "title": "No readiness concerns observed",
+          "description": "No blocking, resolution-required, or caution condition was observed in the available snapshot.",
+          "effect": "context",
+          "observed_value": "no_readiness_concerns",
+          "related_signal_ids": [],
+          "affected_files": [],
+          "explanation": "No blocking, resolution-required, or caution condition was observed in the available snapshot.",
+          "limitations": ["Ready does not prove correctness or safety."]
+        }
+      ],
+      "blocking_reason_count": 0,
+      "resolution_reason_count": 0,
+      "caution_reason_count": 0,
+      "context_reason_count": 1,
+      "rules_version": "v1",
+      "limitations": ["A readiness decision is a deterministic heuristic, not proof of correctness."]
+    },
     "completeness": {
       "files_complete": true,
       "commits_complete": true,
@@ -330,6 +353,7 @@ Snapshot components:
 - `signal_summary`: counts and warnings across emitted review signals.
 - `merge_risk`: deterministic merge-risk assessment derived from scoring review signals.
 - `evidence_confidence`: deterministic evidence-confidence assessment derived from snapshot visibility.
+- `merge_readiness`: deterministic merge-readiness assessment derived from normalized snapshot state, review signals, merge risk, and evidence confidence.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 
@@ -359,7 +383,13 @@ Evidence confidence levels are `low`, `medium`, and `high`. Score bounds are 0-1
 
 Scoring rules version is `v1`. Full weights, caps, confidence components, patch eligibility, and representative calculations are documented in [Scoring](scoring.md).
 
-The snapshot response intentionally does not include merge decisions, blockers, recommendations, ranked files, required reviewers, approval state, or probability claims.
+Merge-readiness decisions are `ready`, `ready_with_caution`, `not_ready`, and `blocked`. Decision effects are `block`, `require_resolution`, `caution`, and `context`.
+
+`MergeReadinessAssessment` includes `decision`, `decisive_rule_id`, `reasons`, `blocking_reason_count`, `resolution_reason_count`, `caution_reason_count`, `context_reason_count`, `rules_version`, and `limitations`. `DecisionReason` includes `rule_id`, `title`, `description`, `effect`, `observed_value`, `related_signal_ids`, `affected_files`, `explanation`, and `limitations`.
+
+Readiness rules version is `v1`. Full rule behavior, precedence, suppression, and representative scenarios are documented in [Merge readiness](merge-readiness.md).
+
+The snapshot response intentionally does not include recommendations, ranked files, file priority, required reviewers, reviewer suggestions, CODEOWNERS results, repository policy results, approval state, generated fixes, or probability claims.
 
 Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
 
@@ -397,4 +427,4 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 - No GitHub Enterprise support.
 - No CODEOWNERS parsing.
 - No required-check inference.
-- No merge decision, recommendation, blocker field, or file ranking.
+- No recommendation engine, reviewer suggestion, approval state, generated fix, or file ranking.

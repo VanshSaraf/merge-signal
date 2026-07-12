@@ -41,6 +41,8 @@ CI visibility also feeds evidence confidence. Complete visibility awards full CI
 
 CI outcome affects merge risk only through explicit review signals such as `ci.failing`, `ci.pending`, `ci.missing`, or `ci.unknown_outcome`. Passing CI does not subtract merge risk and does not prove correctness.
 
+CI state and visibility also feed merge readiness through explicit rules: failing CI blocks readiness, pending or unavailable CI requires resolution, and missing, unknown, or partial CI creates caution.
+
 ## Partial Failures
 
 Authentication failure and rate limiting remain global snapshot failures. Access denied, temporary unavailability, invalid CI responses, and pagination safety failures for one CI source can produce a successful snapshot with partial or unavailable CI visibility and warnings.
@@ -60,7 +62,6 @@ Automated tests use local fixtures, HTTPX `MockTransport`, and FastAPI dependenc
 ## Limitations
 
 - MergeSignal does not yet determine required checks.
-- MergeSignal does not yet calculate merge readiness.
 - MergeSignal does not publish GitHub checks or commit statuses.
 - Passing CI does not prove correctness.
-- CI visibility is one evidence-confidence component, not a merge decision.
+- CI visibility is one evidence-confidence component and one readiness input, not a required-check inference.

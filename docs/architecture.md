@@ -16,6 +16,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/services/` contains application services such as PR URL parsing, CI aggregation, and file classification.
 - `app/signals/` contains deterministic review-signal rules, patch scanning, aggregation, and summary generation.
 - `app/scoring/` contains deterministic merge-risk and evidence-confidence engines, rule weights, group caps, thresholds, and ordering helpers.
+- `app/readiness/` contains deterministic merge-readiness rule metadata, precedence, suppression, and evaluation.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -40,13 +41,14 @@ HTTP request
 -> signal aggregation and summary generation
 -> merge-risk engine
 -> evidence-confidence engine
+-> merge-readiness engine
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include merge decisions, recommendations, blockers, required reviewers, or file ranking.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include recommendations, required reviewers, approval state, CODEOWNERS results, repository policy results, or file ranking.
 
 ## File Classification Service
 
@@ -81,10 +83,17 @@ GitHub data
 -> signal summary
 -> merge-risk engine
 -> evidence-confidence engine
+-> merge-readiness engine
 -> PullRequestSnapshot response
 ```
 
 There is no circular dependency between signal detection and scoring. Signals remain independently visible in the response, and scoring does not mutate signal collections.
+
+## Readiness Engine
+
+The readiness engine lives under `app/readiness/` and consumes final in-memory snapshot state, review signals, merge risk, and evidence confidence. It does not recalculate scoring and does not mutate signals, risk contributions, confidence components, CI data, completeness data, or classifications.
+
+The engine returns exactly one decision: `ready`, `ready_with_caution`, `not_ready`, or `blocked`. Rule effects have explicit precedence: block, require resolution, caution, then context. Readiness performs no filesystem access, no network access, no additional GitHub requests, no repository execution, no dependency installation, no recommendations, and no file ranking.
 
 ## Parser Service
 
@@ -154,8 +163,8 @@ Planned backend areas:
 
 - Repository policy parsing.
 - CODEOWNERS evaluation.
-- Merge-readiness decision logic.
 - File prioritization and report exploration.
+- Recommended reviewer actions.
 - Report serialization.
 
 Planned infrastructure such as PostgreSQL, Redis, background workers, GitHub OAuth, GitHub App flows, and webhooks is intentionally excluded from this foundation.

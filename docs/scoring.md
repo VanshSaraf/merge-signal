@@ -246,7 +246,9 @@ Low risk with low confidence:
 
 `ConfidenceComponent` includes `id`, `name`, `maximum_points`, `awarded_points`, `status`, `explanation`, and `limitations`.
 
-The snapshot response does not include merge decisions, blockers, recommendations, ranked files, required reviewers, approval state, or probability claims.
+Snapshot responses include merge readiness as a separate assessment built after merge risk and evidence confidence. Readiness does not change risk scores or confidence scores. See [Merge readiness](merge-readiness.md) for decision rules and precedence.
+
+The snapshot response does not include recommendations, ranked files, required reviewers, approval state, CODEOWNERS results, repository policy results, generated fixes, or probability claims.
 
 ## Determinism And Boundaries
 
@@ -260,4 +262,4 @@ Tests cover enum serialization, score bounds, invalid point combinations, risk r
 
 ## Future Extension Boundaries
 
-Future milestones may add merge-readiness decisions, file prioritization, CODEOWNERS, repository policies, required-check inference, CLI output, or GitHub App publishing. Those features should consume the existing scoring output through explicit models rather than changing the meaning of merge risk or evidence confidence.
+Future milestones may add file prioritization, CODEOWNERS, repository policies, required-check inference, CLI output, polished frontend reporting, or GitHub App publishing. Those features should consume the existing scoring and readiness output through explicit models rather than changing the meaning of merge risk or evidence confidence.

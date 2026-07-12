@@ -32,6 +32,7 @@ from app.errors import (
     INVALID_PULL_REQUEST_URL,
 )
 from app.main import create_app
+from app.readiness import calculate_merge_readiness
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.file_classifier import classify_changed_files
 from app.signals.engine import analyze_snapshot_signals
@@ -191,12 +192,13 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
     )
     signal_result = analyze_snapshot_signals(snapshot)
     snapshot = snapshot.model_copy(update={"signals": signal_result.signals, "signal_summary": signal_result.summary})
-    return snapshot.model_copy(
+    snapshot = snapshot.model_copy(
         update={
             "merge_risk": calculate_merge_risk(snapshot.signals),
             "evidence_confidence": calculate_evidence_confidence(snapshot),
         }
     )
+    return snapshot.model_copy(update={"merge_readiness": calculate_merge_readiness(snapshot)})
 
 
 class FakeGitHubClient:
@@ -318,6 +320,17 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
         "classification_coverage",
     ]
     assert data["evidence_confidence"]["rules_version"] == "v1"
+    assert "merge_readiness" in data
+    assert data["merge_readiness"]["decision"] == "ready_with_caution"
+    assert data["merge_readiness"]["decisive_rule_id"] == "readiness.caution.patch_visibility_partial"
+    assert [reason["rule_id"] for reason in data["merge_readiness"]["reasons"]] == [
+        "readiness.caution.patch_visibility_partial"
+    ]
+    assert data["merge_readiness"]["blocking_reason_count"] == 0
+    assert data["merge_readiness"]["resolution_reason_count"] == 0
+    assert data["merge_readiness"]["caution_reason_count"] == 1
+    assert data["merge_readiness"]["context_reason_count"] == 0
+    assert data["merge_readiness"]["rules_version"] == "v1"
     assert "risk_score" not in data
     assert "merge_decision" not in data
     assert "blockers" not in data
@@ -480,6 +493,10 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "RiskContribution" in schemas
     assert "RiskGroupScore" in schemas
     assert "ConfidenceComponent" in schemas
+    assert "MergeReadinessAssessment" in schemas
+    assert "DecisionReason" in schemas
+    assert "MergeReadinessDecision" in schemas
+    assert "DecisionEffect" in schemas
     assert "MergeRiskLevel" in schemas
     assert "EvidenceConfidenceLevel" in schemas
     assert "RiskGroup" in schemas
@@ -493,3 +510,5 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "merge_decision" not in str(document)
     assert "recommendations" not in str(document)
     assert "ranked_files" not in str(document)
+    assert "file_priority" not in str(document)
+    assert "approval_state" not in str(document)

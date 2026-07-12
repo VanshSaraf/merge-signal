@@ -10,6 +10,12 @@ from app.domain.file_classification import (
     FileLanguage,
 )
 from app.domain.review_signal import ReviewSignal, ReviewSignalSummary
+from app.domain.readiness import (
+    DecisionEffect,
+    DecisionReason,
+    MergeReadinessAssessment,
+    MergeReadinessDecision,
+)
 from app.domain.scoring import (
     ConfidenceComponent,
     ConfidenceComponentStatus,
@@ -163,6 +169,37 @@ def empty_evidence_confidence_assessment() -> EvidenceConfidenceAssessment:
         limitations=[
             "Evidence confidence measures visibility and completeness, not code quality.",
             "Complete observable data can still miss semantic or runtime issues.",
+        ],
+    )
+
+
+def empty_merge_readiness_assessment() -> MergeReadinessAssessment:
+    return MergeReadinessAssessment(
+        decision=MergeReadinessDecision.READY,
+        decisive_rule_id="readiness.ready_baseline",
+        reasons=[
+            DecisionReason(
+                rule_id="readiness.ready_baseline",
+                title="No readiness concerns observed",
+                description="No blocking, resolution-required, or caution condition was observed in the available snapshot.",
+                effect=DecisionEffect.CONTEXT,
+                observed_value="no_readiness_concerns",
+                related_signal_ids=[],
+                affected_files=[],
+                explanation="No blocking, resolution-required, or caution condition was observed in the available snapshot.",
+                limitations=["Ready does not prove correctness or safety."],
+            )
+        ],
+        blocking_reason_count=0,
+        resolution_reason_count=0,
+        caution_reason_count=0,
+        context_reason_count=1,
+        rules_version="v1",
+        limitations=[
+            "A readiness decision is a deterministic heuristic, not proof of correctness.",
+            "Ready does not mean safe or bug-free.",
+            "Human review remains necessary.",
+            "Decisions use only the evidence available in the snapshot.",
         ],
     )
 
@@ -324,6 +361,10 @@ class PullRequestSnapshot(StrictDomainModel):
     evidence_confidence: EvidenceConfidenceAssessment = Field(
         default_factory=empty_evidence_confidence_assessment,
         description="Deterministic evidence-confidence assessment derived from snapshot visibility.",
+    )
+    merge_readiness: MergeReadinessAssessment = Field(
+        default_factory=empty_merge_readiness_assessment,
+        description="Deterministic merge-readiness decision derived from normalized snapshot assessments.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

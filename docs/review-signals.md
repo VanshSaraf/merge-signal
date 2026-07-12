@@ -6,7 +6,9 @@ Review signals are deterministic, evidence-backed observations derived from a no
 
 Signals are not a merge decision and do not prove code correctness. Signals feed merge-risk scoring through an explicit rule-ID weight registry, but signal severity is not automatically converted into risk points. Signals remain independently visible in snapshot responses even when they have zero scoring weight.
 
-See [Scoring](scoring.md) for merge-risk weights, caps, evidence-confidence components, and score thresholds.
+Readiness rules also consume selected signals through explicit rule IDs. Signals remain visible independently and are not automatically converted into readiness outcomes by severity alone.
+
+See [Scoring](scoring.md) for merge-risk weights, caps, evidence-confidence components, and score thresholds. See [Merge readiness](merge-readiness.md) for readiness rules and precedence.
 
 ## Inputs Used
 

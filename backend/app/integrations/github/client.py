@@ -44,6 +44,7 @@ from app.integrations.github.pagination import parse_next_link
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
+from app.readiness import calculate_merge_readiness
 from app.signals.engine import analyze_snapshot_signals
 
 SleepCallable = Callable[[float], Awaitable[None]]
@@ -228,10 +229,15 @@ class GitHubRestClient:
                 "signal_summary": signal_result.summary,
             }
         )
-        return scored_snapshot.model_copy(
+        scored_snapshot = scored_snapshot.model_copy(
             update={
                 "merge_risk": calculate_merge_risk(signal_result.signals),
                 "evidence_confidence": calculate_evidence_confidence(scored_snapshot),
+            }
+        )
+        return scored_snapshot.model_copy(
+            update={
+                "merge_readiness": calculate_merge_readiness(scored_snapshot),
             }
         )
 

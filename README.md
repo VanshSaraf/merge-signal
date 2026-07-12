@@ -104,6 +104,7 @@ npm audit --audit-level=moderate
 - [Merge readiness](docs/merge-readiness.md)
 - [File prioritization](docs/file-prioritization.md)
 - [Review actions](docs/review-actions.md)
+- [Deployment](docs/deployment.md)
 
 ## Environment Configuration
 
@@ -126,6 +127,10 @@ Frontend:
 - `VITE_API_BASE_URL`
 
 See `backend/.env.example` and `frontend/.env.example` for local defaults.
+
+## Manual Deployment
+
+MergeSignal is prepared for manual deployment with the backend on Render and the frontend on Vercel. Use `render.yaml` for the backend service, set the Vercel project root to `frontend`, configure `VITE_API_BASE_URL` for production, then add the final Vercel origin to `MERGE_SIGNAL_CORS_ORIGINS` and redeploy the backend. See [Deployment](docs/deployment.md) for the full sequence, environment table, smoke test, rollback notes, and troubleshooting.
 
 ## Current Status
 

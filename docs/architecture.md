@@ -181,6 +181,8 @@ React Router owns client-side navigation. The current home page provides the end
 
 Backend configuration is loaded with Pydantic settings using the `MERGE_SIGNAL_` environment prefix. Frontend configuration uses Vite environment variables, currently `VITE_API_BASE_URL`.
 
+Deployment configuration is intentionally thin. `render.yaml` describes the Render backend service under `backend`, installs existing requirements, starts Uvicorn on the provider-supplied `PORT`, and uses `/health` without calling GitHub. `frontend/vercel.json` describes the Vercel frontend build output and SPA fallback. Production CORS is an explicit origin allowlist; wildcard CORS is rejected outside development-style environments.
+
 ## Future Boundaries
 
 Planned backend areas:

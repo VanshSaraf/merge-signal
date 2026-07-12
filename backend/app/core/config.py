@@ -1,11 +1,15 @@
 from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import AliasChoices, AnyUrl, Field, SecretStr
+from pydantic import AliasChoices, AnyUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEVELOPMENT_ENVIRONMENTS = {"development", "dev", "local", "test"}
+
+
 class Settings(BaseSettings):
-    environment: str = Field(default="local")
+    environment: str = Field(default="development")
     project_name: str = Field(default="MergeSignal")
     cors_origins: str = Field(default="http://127.0.0.1:5173,http://localhost:5173")
     github_api_base_url: AnyUrl = Field(
@@ -60,9 +64,35 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @field_validator("environment")
+    @classmethod
+    def normalize_environment(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not normalized:
+            raise ValueError("MERGE_SIGNAL_ENVIRONMENT must not be empty.")
+        return normalized
+
+    @field_validator("cors_origins")
+    @classmethod
+    def normalize_cors_origins(cls, value: str) -> str:
+        origins = _normalize_origin_list(value)
+        return ",".join(origins)
+
+    @model_validator(mode="after")
+    def validate_production_cors(self) -> "Settings":
+        if self.is_production and not self.cors_origin_list:
+            raise ValueError("MERGE_SIGNAL_CORS_ORIGINS must include at least one origin in production.")
+        if self.is_production and "*" in self.cors_origin_list:
+            raise ValueError("MERGE_SIGNAL_CORS_ORIGINS cannot contain '*' in production.")
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment not in DEVELOPMENT_ENVIRONMENTS
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [origin for origin in self.cors_origins.split(",") if origin]
 
     @property
     def github_api_base_url_string(self) -> str:
@@ -77,3 +107,29 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def _normalize_origin_list(value: str) -> list[str]:
+    origins: list[str] = []
+    for raw_origin in value.split(","):
+        origin = raw_origin.strip()
+        if not origin:
+            continue
+        if origin == "*":
+            origins.append(origin)
+            continue
+        origins.append(_normalize_origin(origin))
+    return list(dict.fromkeys(origins))
+
+
+def _normalize_origin(origin: str) -> str:
+    parts = urlsplit(origin)
+    if parts.scheme not in {"http", "https"}:
+        raise ValueError("CORS origins must use http or https.")
+    if not parts.netloc:
+        raise ValueError("CORS origins must include a host.")
+    if parts.username or parts.password:
+        raise ValueError("CORS origins must not include credentials.")
+    if parts.path not in {"", "/"} or parts.query or parts.fragment:
+        raise ValueError("CORS origins must not include paths, queries, or fragments.")
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), "", "", "")).rstrip("/")

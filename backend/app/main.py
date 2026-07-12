@@ -64,6 +64,21 @@ def application_exception_handler(
     )
 
 
+def unhandled_exception_handler(
+    _request: Request,
+    _exception: Exception,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiErrorResponse(
+            error=ApiError(
+                code="INTERNAL_SERVER_ERROR",
+                message="The request could not be completed.",
+            )
+        ).model_dump(exclude_none=True),
+    )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.project_name)
@@ -81,6 +96,7 @@ def create_app() -> FastAPI:
         invalid_pull_request_url_exception_handler,
     )
     app.add_exception_handler(ApplicationError, application_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
     app.include_router(health_router)
     app.include_router(api_v1_router)
     return app

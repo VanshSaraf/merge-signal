@@ -38,6 +38,10 @@ The frontend reads `VITE_API_BASE_URL` from `frontend/.env`. Local default:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+In production, `VITE_API_BASE_URL` is required and must point to the deployed backend. The configuration normalizes trailing slashes, rejects malformed URLs, and refuses localhost values in production. No secrets should be exposed through Vite variables.
+
+For Vercel, set the project root to `frontend`. `frontend/vercel.json` keeps the build command, `dist` output directory, and React Router SPA fallback in one place.
+
 ## Analysis Flow
 
 1. The user enters a public GitHub pull-request URL.

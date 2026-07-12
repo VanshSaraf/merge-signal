@@ -45,7 +45,24 @@ export function FileDetails({ file, onClose, returnFocusRef }) {
           <div><dt>Related signals</dt><dd>{(file.related_signal_ids ?? []).length}</dd></div>
         </dl>
 
-        <DetailList title="Priority factors" items={(file.factors ?? []).map((factor) => `${factor.id}: ${factor.points} points - ${factor.description}`)} />
+        <section className="detail-section">
+          <h3>Priority factors</h3>
+          {(file.factors ?? []).length > 0 ? (
+            <ul className="factor-list">
+              {file.factors.map((factor) => (
+                <li key={factor.id}>
+                  <span aria-hidden="true">✓</span>
+                  <div>
+                    <strong>{factor.id}</strong>
+                    <p>{factor.points} points - {factor.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">None observed.</p>
+          )}
+        </section>
         <DetailList title="Related signal IDs" items={file.related_signal_ids ?? []} />
         <DetailList title="Classification matches" items={(file.classification?.matches ?? []).map((match) => `${match.rule_id}: ${match.description}`)} />
         {file.previous_classification && (

@@ -3,9 +3,9 @@ import { titleCase } from "./formatting.js";
 export const reportSections = [
   { id: "overview", label: "Overview" },
   { id: "files", label: "Files" },
-  { id: "signals", label: "Review signals" },
-  { id: "actions", label: "Review actions" },
-  { id: "evidence", label: "Evidence and limitations" },
+  { id: "signals", label: "Signals" },
+  { id: "actions", label: "Actions" },
+  { id: "evidence", label: "Evidence" },
 ];
 
 export function optionValues(items, getter) {

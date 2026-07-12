@@ -7,9 +7,9 @@ import { ScoreBreakdown } from "./ScoreBreakdown.jsx";
 export function OverviewSection({ snapshot }) {
   return (
     <div className="report-section">
-      <RepositoryHeader snapshot={snapshot} />
       <AssessmentRow snapshot={snapshot} />
       <MetricGrid snapshot={snapshot} />
+      <KeyEvidence snapshot={snapshot} />
       <div className="breakdown-grid">
         <Card title="Merge-risk groups" eyebrow="Not a probability">
           <ScoreBreakdown title="Risk group breakdown" items={snapshot.merge_risk?.group_scores ?? []} />
@@ -19,28 +19,6 @@ export function OverviewSection({ snapshot }) {
         </Card>
       </div>
     </div>
-  );
-}
-
-function RepositoryHeader({ snapshot }) {
-  const metadata = snapshot.metadata;
-  const reference = snapshot.reference;
-  return (
-    <Card className="repo-card">
-      <div className="repo-header">
-        <div>
-          <p className="eyebrow">Repository</p>
-          <h2>{reference.owner}/{reference.repository} <span>#{reference.pull_number}</span></h2>
-          <p>{metadata.title}</p>
-        </div>
-        <a className="button button--secondary" href={reference.canonical_url} target="_blank" rel="noreferrer">Open on GitHub</a>
-      </div>
-      <dl className="repo-meta">
-        <div><dt>Author</dt><dd>{metadata.author?.login ?? "Unknown"}</dd></div>
-        <div><dt>Branch</dt><dd>{metadata.head_branch?.ref} -&gt; {metadata.base_branch?.ref}</dd></div>
-        <div><dt>State</dt><dd>{metadata.draft ? "Draft" : titleCase(metadata.state)}</dd></div>
-      </dl>
-    </Card>
   );
 }
 
@@ -56,7 +34,13 @@ function AssessmentRow({ snapshot }) {
 }
 
 function AssessmentTile({ label, value, tone, detail }) {
-  return <article className="assessment-tile"><span>{label}</span><strong>{value}</strong><Badge tone={tone}>{detail}</Badge></article>;
+  return (
+    <article className="assessment-tile">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <Badge tone={tone}>{detail}</Badge>
+    </article>
+  );
 }
 
 function MetricGrid({ snapshot }) {
@@ -71,6 +55,27 @@ function MetricGrid({ snapshot }) {
   return (
     <section className="metric-grid" aria-label="Snapshot metrics">
       {metrics.map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{formatNumber(value)}</strong></div>)}
+    </section>
+  );
+}
+
+function KeyEvidence({ snapshot }) {
+  const limitations = [
+    ...(snapshot.merge_readiness?.limitations ?? []),
+    ...(snapshot.merge_risk?.limitations ?? []),
+    ...(snapshot.evidence_confidence?.limitations ?? []),
+  ];
+
+  return (
+    <section className="overview-evidence" aria-label="Key evidence and limitations">
+      <div>
+        <p className="eyebrow">Decisive rule</p>
+        <code>{snapshot.merge_readiness?.decisive_rule_id ?? "none"}</code>
+      </div>
+      <div>
+        <p className="eyebrow">Key limitations</p>
+        <p>{limitations.slice(0, 2).join(" ") || "No limitations returned for the current snapshot."}</p>
+      </div>
     </section>
   );
 }

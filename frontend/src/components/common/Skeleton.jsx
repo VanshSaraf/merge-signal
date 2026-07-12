@@ -1,7 +1,10 @@
+import { MergeSignalLogo } from "../brand/MergeSignalLogo.jsx";
+
 export function SkeletonDashboard() {
   return (
     <section className="skeleton-wrap" aria-live="polite" aria-label="Analysis loading">
-      <div>
+      <div className="skeleton-copy">
+        <MergeSignalLogo size={40} decorative />
         <p className="eyebrow">Analyzing snapshot</p>
         <h2>Collecting deterministic evidence...</h2>
       </div>

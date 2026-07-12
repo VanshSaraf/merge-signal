@@ -5,25 +5,28 @@ export function AnalysisForm({ value, onChange, onSubmit, onCancel, isLoading, v
     <form className="analysis-form" onSubmit={onSubmit}>
       <div className="form-copy">
         <p className="eyebrow">Pull-request snapshot</p>
-        <h2>Analyze merge readiness from observable evidence.</h2>
-        <p>Paste a public GitHub pull-request URL. The backend remains the source of truth for strict validation.</p>
+        <h2>Inspect merge readiness from observable evidence.</h2>
+        <p>Paste a public GitHub pull-request URL. MergeSignal returns deterministic risk, confidence, readiness, file priority, and review prompts.</p>
       </div>
       <div className="form-row">
         <label className="input-label" htmlFor="pull-request-url">
           GitHub PR URL
         </label>
-        <input
-          id="pull-request-url"
-          name="pull-request-url"
-          type="url"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="https://github.com/owner/repository/pull/123"
-          aria-describedby="pull-request-help pull-request-error"
-          disabled={isLoading}
-        />
+        <div className="command-input">
+          <span aria-hidden="true">pr</span>
+          <input
+            id="pull-request-url"
+            name="pull-request-url"
+            type="url"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="https://github.com/owner/repository/pull/123"
+            aria-describedby="pull-request-help pull-request-error"
+            disabled={isLoading}
+          />
+        </div>
         <p id="pull-request-help" className="input-help">
-          Example: https://github.com/owner/repository/pull/123
+          Press Enter to analyze. Example: https://github.com/owner/repository/pull/123
         </p>
         {validationError && (
           <p id="pull-request-error" className="input-error" role="alert">

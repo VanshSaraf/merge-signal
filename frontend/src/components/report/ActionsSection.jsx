@@ -1,6 +1,6 @@
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
-import { compactList, titleCase } from "../../utils/formatting.js";
+import { titleCase } from "../../utils/formatting.js";
 import { optionValues } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { FilterBar, SelectFilter, TextFilter } from "./FilterBar.jsx";
@@ -18,9 +18,10 @@ export function ActionsSection({ actions, filteredActions, filters, setFilters, 
         <TextFilter id="action-file" label="Affected file" value={filters.fileQuery} onChange={(fileQuery) => setFilters({ ...filters, fileQuery })} placeholder="path fragment" />
       </FilterBar>
       {filteredActions.length === 0 ? <p className="empty-result">No review actions match the current filters.</p> : (
-        <div className="stack-list report-list">
+        <div className="stack-list report-list action-list">
           {filteredActions.map((action) => (
             <article className="report-item" key={action.id}>
+              <span className="action-marker" aria-hidden="true" />
               <div className="item-heading">
                 <Badge tone={toneForLevel(action.priority)}>{titleCase(action.priority)}</Badge>
                 <Badge>{titleCase(action.category)}</Badge>
@@ -28,7 +29,7 @@ export function ActionsSection({ actions, filteredActions, filters, setFilters, 
               </div>
               <h3>{action.title}</h3>
               <p>{action.description}</p>
-              {action.affected_files?.length > 0 && <small>Affected: {compactList(action.affected_files, 4)}</small>}
+              {action.affected_files?.length > 0 && <small>Affected: <span className="path-chip-list">{action.affected_files.map((file) => <code key={file}>{file}</code>)}</span></small>}
               <SmallList title="Related signals" items={action.related_signal_ids ?? []} />
               <SmallList title="Related readiness rules" items={action.related_readiness_rule_ids ?? []} />
               <SmallList title="Evidence" items={action.evidence ?? []} />

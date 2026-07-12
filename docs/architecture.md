@@ -165,6 +165,8 @@ The snapshot endpoint may fetch public data from the configured GitHub REST API 
 The frontend is a Vite React application under `frontend/src`.
 
 - `api/` contains the centralized pull-request snapshot API client.
+- `components/brand/` contains the original SVG brand mark.
+- `components/layout/` contains the application header and report shell.
 - `components/` contains reusable UI pieces.
 - `components/report/` contains detailed snapshot report sections, filters, score breakdowns, and the file detail drawer.
 - `hooks/` contains analysis and theme state.
@@ -173,7 +175,7 @@ The frontend is a Vite React application under `frontend/src`.
 - `test/` contains test setup.
 - `utils/` contains formatting and status helpers.
 
-React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, ranked files, review signals, review actions, and evidence/limitations. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
+React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, files, signals, actions, and evidence. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
 
 ## Configuration
 

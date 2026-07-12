@@ -270,13 +270,14 @@ describe("App", () => {
 
   it("shows loading state and supports cancellation", async () => {
     const user = userEvent.setup();
-    let resolveSnapshot;
-    global.fetch = vi.fn((url) => {
+    global.fetch = vi.fn((url, options = {}) => {
       if (String(url).endsWith("/health")) {
         return healthResponse();
       }
-      return new Promise((resolve) => {
-        resolveSnapshot = () => resolve(okSnapshot());
+      return new Promise((resolve, reject) => {
+        options.signal?.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
       });
     });
     renderApp();
@@ -285,9 +286,9 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(screen.getByText(/Collecting deterministic evidence/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    resolveSnapshot();
+    expect(await screen.findByText(/Ready for a pull request/i)).toBeInTheDocument();
   });
 
   it("renders a successful analysis dashboard from the API response", async () => {
@@ -299,17 +300,17 @@ describe("App", () => {
 
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
     expect(screen.getByText("Improve merge signal collection")).toBeInTheDocument();
-    expect(screen.getByText("Ready With Caution")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready With Caution").length).toBeGreaterThan(0);
     expect(screen.getByText("42/100")).toBeInTheDocument();
     expect(screen.getByText("86/100")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
     expect(screen.getAllByText("backend/app/security/secrets.py").length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("tab", { name: "Review actions" }));
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
     expect(screen.getByText("Verify credential-like literal")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Review signals" }));
+    await user.click(screen.getByRole("tab", { name: "Signals" }));
     expect(screen.getByText("Credential-like literal pattern added")).toBeInTheDocument();
     expect(screen.queryByText("not-a-real-secret-fixture")).not.toBeInTheDocument();
     expect(screen.queryByText(/password =/i)).not.toBeInTheDocument();
@@ -325,7 +326,7 @@ describe("App", () => {
     expect(await screen.findByText("Risk group breakdown")).toBeInTheDocument();
     expect(screen.getByText("Confidence components")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Evidence and limitations" }));
+    await user.click(screen.getByRole("tab", { name: "Evidence" }));
     expect(screen.getByText("Readiness reasons")).toBeInTheDocument();
     expect(screen.getByText("Risk contributions")).toBeInTheDocument();
     expect(screen.getByText("Classification summary")).toBeInTheDocument();
@@ -366,7 +367,8 @@ describe("App", () => {
     await user.selectOptions(screen.getByLabelText("Sort"), "path");
     expect(screen.getAllByRole("button", { name: "Details" })).toHaveLength(3);
 
-    await user.click(screen.getAllByRole("button", { name: "Details" })[0]);
+    const firstDetailsButton = screen.getAllByRole("button", { name: "Details" })[0];
+    await user.click(firstDetailsButton);
     expect(screen.getByRole("dialog", { name: /backend\/app/i })).toBeInTheDocument();
     expect(screen.getByText("Priority factors")).toBeInTheDocument();
 
@@ -374,6 +376,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    expect(document.activeElement).toBe(firstDetailsButton);
   });
 
   it("shows empty file filter results", async () => {
@@ -395,7 +398,7 @@ describe("App", () => {
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
     await user.click(screen.getByRole("button", { name: "Analyze" }));
 
-    await user.click(await screen.findByRole("tab", { name: "Review signals" }));
+    await user.click(await screen.findByRole("tab", { name: "Signals" }));
     await user.selectOptions(screen.getByLabelText("Severity"), "medium");
     expect(screen.getByText("Runtime configuration paths changed")).toBeInTheDocument();
     expect(screen.queryByText("Credential-like literal pattern added")).not.toBeInTheDocument();
@@ -403,11 +406,71 @@ describe("App", () => {
     await user.type(screen.getByLabelText("Affected file"), "secrets");
     expect(screen.getByText("Credential-like literal pattern added")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Review actions" }));
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
     expect(screen.getByText(/not automated fixes or reviewer assignments/i)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("Priority"), "low");
     expect(screen.getByText("Review highest-priority files")).toBeInTheDocument();
     expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();
+  });
+
+  it("supports keyboard navigation across report tabs", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    const overviewTab = await screen.findByRole("tab", { name: "Overview" });
+    overviewTab.focus();
+    await user.keyboard("{ArrowRight}");
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Files" })).toHaveAttribute("aria-selected", "true");
+    });
+    expect(screen.getByText("Ranked files")).toBeInTheDocument();
+
+    await user.keyboard("{End}");
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Evidence" })).toHaveAttribute("aria-selected", "true");
+    });
+    expect(screen.getByText("Deduplicated limitations")).toBeInTheDocument();
+  });
+
+  it("renders empty report section states and unknown enum fallbacks", async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshotResponse({
+        ranked_files: [],
+        signals: [],
+        signal_summary: { total_signals: 0 },
+        review_actions: [],
+        review_action_summary: { total_actions: 0 },
+        merge_readiness: { decision: "needs_manual_review", decisive_rule_id: "readiness.manual", limitations: [] },
+        merge_risk: { score: 0, level: "unmapped_level", limitations: [] },
+        evidence_confidence: { score: 0, level: "unknown_visibility", components: [], limitations: [] },
+        ci: { state: "not_observed", visibility: "unknown" },
+      }));
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    await screen.findAllByText("Needs Manual Review");
+    expect(screen.getAllByText("Needs Manual Review").length).toBeGreaterThan(0);
+    expect(screen.getByText("Unmapped Level")).toBeInTheDocument();
+    expect(screen.getByText("Unknown Visibility")).toBeInTheDocument();
+    expect(screen.getByText("Not Observed")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+    expect(screen.getByText("No files match the current filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Signals" }));
+    expect(screen.getByText("No signals match the current filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
+    expect(screen.getByText("No review actions match the current filters.")).toBeInTheDocument();
   });
 
   it("renders backend errors and retries with the preserved URL", async () => {
@@ -448,7 +511,7 @@ describe("App", () => {
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
   });
 
-  it("renders a not-found route", () => {
+  it("renders a not-found route", async () => {
     render(
       <MemoryRouter initialEntries={["/missing"]}>
         <App />
@@ -456,5 +519,6 @@ describe("App", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(await screen.findByText("Backend online")).toBeInTheDocument();
   });
 });

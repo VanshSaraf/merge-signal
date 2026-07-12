@@ -50,7 +50,11 @@ export function FilesSection({ files, filteredFiles, filters, setFilters, resetF
                 <small>{titleCase(file.status)} · {titleCase(file.primary_kind)} · {titleCase(file.language)} · {compactList(file.areas ?? [], 3) || "No area"}</small>
               </div>
               <Badge tone={toneForLevel(file.level)}>{file.score} · {titleCase(file.level)}</Badge>
-              <span>{formatNumber(file.additions)} + / {formatNumber(file.deletions)} - / {formatNumber(file.changes)} total</span>
+              <span className="diff-stat">
+                <span className="diff-stat__add">+{formatNumber(file.additions)}</span>
+                <span className="diff-stat__delete">-{formatNumber(file.deletions)}</span>
+                <span>{formatNumber(file.changes)} total</span>
+              </span>
               <span>{(file.related_signal_ids ?? []).length} signals</span>
               <button className="button button--secondary" type="button" onClick={(event) => openFile(file, event)}>Details</button>
             </article>

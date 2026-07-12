@@ -164,12 +164,15 @@ The snapshot endpoint may fetch public data from the configured GitHub REST API 
 
 The frontend is a Vite React application under `frontend/src`.
 
+- `api/` contains the centralized pull-request snapshot API client.
 - `components/` contains reusable UI pieces.
+- `hooks/` contains analysis and theme state.
 - `pages/` contains route-level views.
 - `services/` contains API configuration and request helpers.
 - `test/` contains test setup.
+- `utils/` contains formatting and status helpers.
 
-React Router owns client-side navigation. The initial UI displays backend health with loading, success, and error states.
+React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a summary dashboard built only from real snapshot responses.
 
 ## Configuration
 

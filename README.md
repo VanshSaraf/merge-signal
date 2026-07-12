@@ -95,6 +95,7 @@ npm audit --audit-level=moderate
 - [Product scope](docs/product-scope.md)
 - [Architecture](docs/architecture.md)
 - [API](docs/api.md)
+- [Frontend](docs/frontend.md)
 - [GitHub integration](docs/github-integration.md)
 - [CI surface](docs/ci-surface.md)
 - [File classification](docs/file-classification.md)

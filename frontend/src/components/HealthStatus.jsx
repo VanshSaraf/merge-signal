@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { getHealth } from "../services/healthApi.js";
 
-export function HealthStatus() {
+export function HealthStatus({ compact = false }) {
   const [state, setState] = useState({ status: "loading", data: null, error: null });
 
   useEffect(() => {
@@ -26,21 +26,21 @@ export function HealthStatus() {
   }, []);
 
   if (state.status === "loading") {
-    return <section className="status-panel" aria-live="polite">Checking backend health...</section>;
+    return <section className={`status-panel ${compact ? "status-panel--compact" : ""}`} aria-live="polite">Checking backend health...</section>;
   }
 
   if (state.status === "error") {
     return (
-      <section className="status-panel status-panel--error" aria-live="polite">
-        Backend health unavailable: {state.error.message}
+      <section className={`status-panel status-panel--error ${compact ? "status-panel--compact" : ""}`} aria-live="polite">
+        Backend unavailable{compact ? "" : `: ${state.error.message}`}
       </section>
     );
   }
 
   return (
-    <section className="status-panel status-panel--success" aria-live="polite">
+    <section className={`status-panel status-panel--success ${compact ? "status-panel--compact" : ""}`} aria-live="polite">
       <span className="status-dot" aria-hidden="true" />
-      Backend is {state.data.status} for {state.data.service} in {state.data.environment}.
+      {compact ? "Backend online" : `Backend is ${state.data.status} for ${state.data.service} in ${state.data.environment}.`}
     </section>
   );
 }

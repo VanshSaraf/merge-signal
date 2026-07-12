@@ -4,7 +4,9 @@
 
 Review signals are deterministic, evidence-backed observations derived from a normalized pull-request snapshot. They help reviewers navigate observable metadata, changed-file classification, CI visibility, and patch-level hints without claiming that a pull request is safe, unsafe, correct, or incorrect.
 
-Signals are not a numerical risk score. They are not evidence confidence. They are not a merge decision. They do not prove code correctness.
+Signals are not a merge decision and do not prove code correctness. Signals feed merge-risk scoring through an explicit rule-ID weight registry, but signal severity is not automatically converted into risk points. Signals remain independently visible in snapshot responses even when they have zero scoring weight.
+
+See [Scoring](scoring.md) for merge-risk weights, caps, evidence-confidence components, and score thresholds.
 
 ## Inputs Used
 

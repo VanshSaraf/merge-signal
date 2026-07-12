@@ -49,18 +49,18 @@ Each changed file in a snapshot includes:
 
 The snapshot also includes `classification_summary` with total file counts, counts by kind, area, and language, renamed-file counts, missing-patch counts, and aggregate warnings.
 
+Evidence confidence uses classification coverage as one visibility component. A file is considered meaningfully classified when either its primary kind or language is known. Functional area is not required for that confidence component.
+
 ## Non-Goals
 
-- No risk scoring.
-- No evidence confidence scoring.
 - No merge decision.
-- No ranked file list.
+- No file ranking.
 - No generated review commentary.
 - No repository checkout, file-content inspection, arbitrary execution, or dependency installation.
 - No claim that a recognized file kind proves a change is safe or unsafe.
 
 ## Future Use
 
-The classification output feeds deterministic review-signal detection today and is intended to feed later CODEOWNERS and policy evaluation, changed-file ranking, evidence confidence, and merge-risk scoring. Later stages should consume the classification evidence instead of duplicating path heuristics inside route handlers.
+The classification output feeds deterministic review-signal detection, merge-risk scoring, and evidence-confidence scoring today. It is intended to feed later CODEOWNERS and policy evaluation and changed-file prioritization. Later stages should consume the classification evidence instead of duplicating path heuristics inside route handlers.
 
 The current review-signal engine consumes file kind, functional areas, language, matched rename classifications, and missing-patch context as snapshot evidence. Classification remains descriptive metadata; signals do not reinterpret classification as proof that a change is safe or unsafe.

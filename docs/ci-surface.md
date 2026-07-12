@@ -37,6 +37,10 @@ CI visibility values are `complete`, `partial`, and `unavailable`.
 
 The review-signal engine consumes these normalized values directly. It may emit CI signals for failing, pending, missing, unavailable, partial, or unknown observed outcomes, but it does not infer required checks or merge readiness.
 
+CI visibility also feeds evidence confidence. Complete visibility awards full CI-visibility confidence points, partial visibility awards partial points, and unavailable visibility awards none. CI outcome does not change evidence confidence.
+
+CI outcome affects merge risk only through explicit review signals such as `ci.failing`, `ci.pending`, `ci.missing`, or `ci.unknown_outcome`. Passing CI does not subtract merge risk and does not prove correctness.
+
 ## Partial Failures
 
 Authentication failure and rate limiting remain global snapshot failures. Access denied, temporary unavailability, invalid CI responses, and pagination safety failures for one CI source can produce a successful snapshot with partial or unavailable CI visibility and warnings.
@@ -59,4 +63,4 @@ Automated tests use local fixtures, HTTPX `MockTransport`, and FastAPI dependenc
 - MergeSignal does not yet calculate merge readiness.
 - MergeSignal does not publish GitHub checks or commit statuses.
 - Passing CI does not prove correctness.
-- CI visibility is not merge risk or evidence confidence.
+- CI visibility is one evidence-confidence component, not a merge decision.

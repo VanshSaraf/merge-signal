@@ -10,6 +10,16 @@ from app.domain.file_classification import (
     FileLanguage,
 )
 from app.domain.review_signal import ReviewSignal, ReviewSignalSummary
+from app.domain.scoring import (
+    ConfidenceComponent,
+    ConfidenceComponentStatus,
+    EvidenceConfidenceAssessment,
+    EvidenceConfidenceLevel,
+    MergeRiskAssessment,
+    MergeRiskLevel,
+    RiskGroup,
+    RiskGroupScore,
+)
 
 
 class StrictDomainModel(BaseModel):
@@ -59,6 +69,101 @@ def empty_signal_summary() -> ReviewSignalSummary:
         ci_signal_count=0,
         warnings=[],
         rules_version="v1",
+    )
+
+
+def empty_merge_risk_assessment() -> MergeRiskAssessment:
+    return MergeRiskAssessment(
+        score=0,
+        level=MergeRiskLevel.LOW,
+        max_score=100,
+        group_scores=[
+            RiskGroupScore(group=RiskGroup.CHANGE_SCOPE, raw_points=0, applied_points=0, cap=20, capped_points=0, contribution_count=0),
+            RiskGroupScore(group=RiskGroup.SENSITIVE_SYSTEMS, raw_points=0, applied_points=0, cap=25, capped_points=0, contribution_count=0),
+            RiskGroupScore(group=RiskGroup.TESTING, raw_points=0, applied_points=0, cap=15, capped_points=0, contribution_count=0),
+            RiskGroupScore(group=RiskGroup.CI, raw_points=0, applied_points=0, cap=20, capped_points=0, contribution_count=0),
+            RiskGroupScore(group=RiskGroup.OPERATIONAL_CHANGE, raw_points=0, applied_points=0, cap=15, capped_points=0, contribution_count=0),
+            RiskGroupScore(group=RiskGroup.CODE_QUALITY, raw_points=0, applied_points=0, cap=5, capped_points=0, contribution_count=0),
+        ],
+        contributions=[],
+        contributing_signal_count=0,
+        non_scoring_signal_count=0,
+        rules_version="v1",
+        limitations=[
+            "Merge risk is a deterministic heuristic, not a probability.",
+            "Merge risk is not a merge decision and does not prove a pull request contains a defect.",
+            "A low merge-risk score does not mean a pull request is safe.",
+        ],
+    )
+
+
+def empty_evidence_confidence_assessment() -> EvidenceConfidenceAssessment:
+    return EvidenceConfidenceAssessment(
+        score=100,
+        level=EvidenceConfidenceLevel.HIGH,
+        max_score=100,
+        components=[
+            ConfidenceComponent(
+                id="pull_request_metadata",
+                name="Pull-request metadata",
+                maximum_points=15,
+                awarded_points=15,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="Core normalized pull-request metadata is present.",
+                limitations=["Snapshot creation requires valid core metadata."],
+            ),
+            ConfidenceComponent(
+                id="changed_file_collection",
+                name="Changed-file collection",
+                maximum_points=25,
+                awarded_points=25,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="Changed-file collection completed.",
+                limitations=[],
+            ),
+            ConfidenceComponent(
+                id="patch_visibility",
+                name="Patch visibility",
+                maximum_points=25,
+                awarded_points=25,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="Patch text is available for all patch-eligible files.",
+                limitations=[],
+            ),
+            ConfidenceComponent(
+                id="commit_collection",
+                name="Commit collection",
+                maximum_points=10,
+                awarded_points=10,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="Commit collection completed.",
+                limitations=[],
+            ),
+            ConfidenceComponent(
+                id="ci_visibility",
+                name="CI visibility",
+                maximum_points=15,
+                awarded_points=15,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="CI visibility is complete for observed check-run and commit-status surfaces.",
+                limitations=[],
+            ),
+            ConfidenceComponent(
+                id="classification_coverage",
+                name="Classification coverage",
+                maximum_points=10,
+                awarded_points=10,
+                status=ConfidenceComponentStatus.COMPLETE,
+                explanation="Changed files have a known kind or language.",
+                limitations=[],
+            ),
+        ],
+        warnings=[],
+        rules_version="v1",
+        limitations=[
+            "Evidence confidence measures visibility and completeness, not code quality.",
+            "Complete observable data can still miss semantic or runtime issues.",
+        ],
     )
 
 
@@ -211,6 +316,14 @@ class PullRequestSnapshot(StrictDomainModel):
     signal_summary: ReviewSignalSummary = Field(
         default_factory=empty_signal_summary,
         description="Pull-request-level summary of review signals.",
+    )
+    merge_risk: MergeRiskAssessment = Field(
+        default_factory=empty_merge_risk_assessment,
+        description="Deterministic merge-risk assessment derived from observed review signals.",
+    )
+    evidence_confidence: EvidenceConfidenceAssessment = Field(
+        default_factory=empty_evidence_confidence_assessment,
+        description="Deterministic evidence-confidence assessment derived from snapshot visibility.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, ranking, or merge-readiness decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, and returns a normalized snapshot. This endpoint does not perform required-check inference, recommendations, ranking, or merge-readiness decisions.
 
 Request:
 
@@ -239,6 +239,45 @@ Compact success response:
       "warnings": [],
       "rules_version": "v1"
     },
+    "merge_risk": {
+      "score": 0,
+      "level": "low",
+      "max_score": 100,
+      "group_scores": [
+        {
+          "group": "change_scope",
+          "raw_points": 0,
+          "applied_points": 0,
+          "cap": 20,
+          "capped_points": 0,
+          "contribution_count": 0
+        }
+      ],
+      "contributions": [],
+      "contributing_signal_count": 0,
+      "non_scoring_signal_count": 1,
+      "rules_version": "v1",
+      "limitations": ["Merge risk is a deterministic heuristic, not a probability."]
+    },
+    "evidence_confidence": {
+      "score": 100,
+      "level": "high",
+      "max_score": 100,
+      "components": [
+        {
+          "id": "pull_request_metadata",
+          "name": "Pull-request metadata",
+          "maximum_points": 15,
+          "awarded_points": 15,
+          "status": "complete",
+          "explanation": "Core normalized pull-request metadata is present.",
+          "limitations": ["Snapshot creation requires valid core metadata."]
+        }
+      ],
+      "warnings": [],
+      "rules_version": "v1",
+      "limitations": ["Evidence confidence measures visibility and completeness, not code quality."]
+    },
     "completeness": {
       "files_complete": true,
       "commits_complete": true,
@@ -289,6 +328,8 @@ Snapshot components:
 - `classification_summary`: counts and warnings across changed-file classifications.
 - `signals`: deterministic review signals derived from snapshot data.
 - `signal_summary`: counts and warnings across emitted review signals.
+- `merge_risk`: deterministic merge-risk assessment derived from scoring review signals.
+- `evidence_confidence`: deterministic evidence-confidence assessment derived from snapshot visibility.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 
@@ -305,6 +346,20 @@ Signal severity values are `info`, `low`, `medium`, and `high`. Signal category 
 Signal evidence kinds are `metadata`, `file_path`, `file_count`, `line_count`, `classification`, `ci_state`, `ci_visibility`, `patch_pattern`, `rename_transition`, `completeness`, and `commit_count`.
 
 Review signals are ordered deterministically by severity, category, rule ID, and signal ID. Affected files and evidence are deduplicated and sorted. Credential-like patch evidence never returns suspected literal values or full source lines.
+
+Merge risk levels are `low`, `moderate`, `high`, and `very_high`. Score bounds are 0-100. Level thresholds are 0-24 low, 25-49 moderate, 50-74 high, and 75-100 very high.
+
+Risk group values are `change_scope`, `sensitive_systems`, `testing`, `ci`, `operational_change`, and `code_quality`. Group caps are 20, 25, 15, 20, 15, and 5 respectively, totaling 100.
+
+`MergeRiskAssessment` includes `score`, `level`, `max_score`, `group_scores`, `contributions`, `contributing_signal_count`, `non_scoring_signal_count`, `rules_version`, and `limitations`. `RiskGroupScore` includes `group`, `raw_points`, `applied_points`, `cap`, `capped_points`, and `contribution_count`. `RiskContribution` includes `signal_id`, `rule_id`, `group`, `title`, `severity`, `raw_points`, `applied_points`, `capped`, `affected_files`, and `explanation`.
+
+Evidence confidence levels are `low`, `medium`, and `high`. Score bounds are 0-100. Level thresholds are 0-49 low, 50-79 medium, and 80-100 high.
+
+`EvidenceConfidenceAssessment` includes `score`, `level`, `max_score`, `components`, `warnings`, `rules_version`, and `limitations`. `ConfidenceComponent` includes `id`, `name`, `maximum_points`, `awarded_points`, `status`, `explanation`, and `limitations`. Component statuses are `complete`, `partial`, `unavailable`, and `not_applicable`.
+
+Scoring rules version is `v1`. Full weights, caps, confidence components, patch eligibility, and representative calculations are documented in [Scoring](scoring.md).
+
+The snapshot response intentionally does not include merge decisions, blockers, recommendations, ranked files, required reviewers, approval state, or probability claims.
 
 Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
 
@@ -342,5 +397,4 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 - No GitHub Enterprise support.
 - No CODEOWNERS parsing.
 - No required-check inference.
-- No merge risk or evidence confidence calculation yet.
 - No merge decision, recommendation, blocker field, or file ranking.

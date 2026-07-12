@@ -32,6 +32,7 @@ from app.errors import (
     INVALID_PULL_REQUEST_URL,
 )
 from app.main import create_app
+from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.file_classifier import classify_changed_files
 from app.signals.engine import analyze_snapshot_signals
 
@@ -189,7 +190,13 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
         ),
     )
     signal_result = analyze_snapshot_signals(snapshot)
-    return snapshot.model_copy(update={"signals": signal_result.signals, "signal_summary": signal_result.summary})
+    snapshot = snapshot.model_copy(update={"signals": signal_result.signals, "signal_summary": signal_result.summary})
+    return snapshot.model_copy(
+        update={
+            "merge_risk": calculate_merge_risk(snapshot.signals),
+            "evidence_confidence": calculate_evidence_confidence(snapshot),
+        }
+    )
 
 
 class FakeGitHubClient:
@@ -282,8 +289,36 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["ci"]["visibility"] == "complete"
     assert data["ci"]["check_runs"][0]["provider_slug"] == "github-actions"
     assert data["ci"]["commit_statuses"][0]["context"] == "build"
+    assert "merge_risk" in data
+    assert "evidence_confidence" in data
+    assert data["merge_risk"]["score"] == 9
+    assert data["merge_risk"]["level"] == "low"
+    assert data["merge_risk"]["max_score"] == 100
+    assert [group["group"] for group in data["merge_risk"]["group_scores"]] == [
+        "change_scope",
+        "sensitive_systems",
+        "testing",
+        "ci",
+        "operational_change",
+        "code_quality",
+    ]
+    assert [contribution["rule_id"] for contribution in data["merge_risk"]["contributions"]] == [
+        "testing.production_change_without_test_files",
+        "completeness.opaque_files_changed",
+    ]
+    assert data["merge_risk"]["rules_version"] == "v1"
+    assert data["evidence_confidence"]["score"] == 87
+    assert data["evidence_confidence"]["level"] == "high"
+    assert [component["id"] for component in data["evidence_confidence"]["components"]] == [
+        "pull_request_metadata",
+        "changed_file_collection",
+        "patch_visibility",
+        "commit_collection",
+        "ci_visibility",
+        "classification_coverage",
+    ]
+    assert data["evidence_confidence"]["rules_version"] == "v1"
     assert "risk_score" not in data
-    assert "evidence_confidence" not in data
     assert "merge_decision" not in data
     assert "blockers" not in data
     assert "recommendations" not in data
@@ -440,9 +475,21 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "ReviewSignal" in schemas
     assert "SignalEvidence" in schemas
     assert "ReviewSignalSummary" in schemas
+    assert "MergeRiskAssessment" in schemas
+    assert "EvidenceConfidenceAssessment" in schemas
+    assert "RiskContribution" in schemas
+    assert "RiskGroupScore" in schemas
+    assert "ConfidenceComponent" in schemas
+    assert "MergeRiskLevel" in schemas
+    assert "EvidenceConfidenceLevel" in schemas
+    assert "RiskGroup" in schemas
+    assert "ConfidenceComponentStatus" in schemas
     assert "SignalSeverity" in schemas
     assert "SignalCategory" in schemas
     assert "SignalScope" in schemas
     assert "EvidenceKind" in schemas
     assert "FetchPullRequestSnapshotRequest" in schemas
     assert "FetchPullRequestSnapshotResponse" in schemas
+    assert "merge_decision" not in str(document)
+    assert "recommendations" not in str(document)
+    assert "ranked_files" not in str(document)

@@ -8,7 +8,7 @@ Pull requests can look easy to merge while still carrying hidden risk: sensitive
 
 The first version will analyze public GitHub pull requests using repository metadata, changed files, CODEOWNERS, branch and review policies, status checks, and explicit evidence available through supported GitHub surfaces. It will produce separate merge risk and evidence confidence outputs so teams can distinguish likely implementation risk from the strength of the supporting evidence.
 
-The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, GitHub REST retrieval for public pull-request metadata, changed files, commits, read-only CI visibility, deterministic path-based changed-file classification, and deterministic review-signal detection. It does not implement merge risk scoring, evidence confidence, or merge-readiness decisions.
+The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, GitHub REST retrieval for public pull-request metadata, changed files, commits, read-only CI visibility, deterministic path-based changed-file classification, deterministic review-signal detection, deterministic merge-risk scoring, and deterministic evidence-confidence calculation. It does not implement merge-readiness decisions, file prioritization, recommendations, CODEOWNERS, or repository policy evaluation.
 
 ## Non-Goals
 
@@ -23,12 +23,12 @@ The current implementation includes the project foundation, deterministic public
 
 ## Main Product Outputs
 
-- Merge risk score with deterministic supporting signals.
-- Evidence confidence score that describes how much reliable evidence was available.
-- Ranked changed-file list by expected review sensitivity.
-- CODEOWNERS and repository policy evaluation.
-- Human-readable merge-readiness summary grounded in collected evidence.
-- Machine-readable report suitable for CLI and GitHub App integrations.
+- Merge risk score with deterministic supporting signals. Implemented for current snapshot responses.
+- Evidence confidence score that describes how much observable evidence was available. Implemented for current snapshot responses.
+- Ranked changed-file list by expected review sensitivity. Future milestone.
+- CODEOWNERS and repository policy evaluation. Future milestone.
+- Human-readable merge-readiness summary grounded in collected evidence. Future milestone.
+- Machine-readable report suitable for CLI and GitHub App integrations. Future milestone.
 
 ## Planned Implementation Phases
 
@@ -39,5 +39,6 @@ The current implementation includes the project foundation, deterministic public
 5. Deterministic file classification: primary file kind, functional areas, languages, renamed-path classification, matched rule evidence, warnings, and summary counts.
 6. Signal detection: deterministic rules for changed-file sensitivity, review evidence, CI visibility, dependency changes, migration hints, patch-level review hints, rename transitions, and completeness gaps.
 7. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
-8. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
-9. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.
+8. Merge-readiness logic: bounded decision model, file prioritization, recommendations, CODEOWNERS, and repository policy evaluation.
+9. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
+10. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.

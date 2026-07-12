@@ -15,6 +15,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/domain/` contains domain models that do not depend on FastAPI route code.
 - `app/services/` contains application services such as PR URL parsing, CI aggregation, and file classification.
 - `app/signals/` contains deterministic review-signal rules, patch scanning, aggregation, and summary generation.
+- `app/scoring/` contains deterministic merge-risk and evidence-confidence engines, rule weights, group caps, thresholds, and ordering helpers.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -37,13 +38,15 @@ HTTP request
 -> check-run and commit-status retrieval for that head SHA
 -> deterministic review-signal engine
 -> signal aggregation and summary generation
+-> merge-risk engine
+-> evidence-confidence engine
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, merge decisions, recommendations, or file ranking.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include merge decisions, recommendations, blockers, required reviewers, or file ranking.
 
 ## File Classification Service
 
@@ -58,6 +61,30 @@ The signal engine lives under `app/signals/`. Rule metadata and thresholds are c
 The engine is pure application logic. It depends on typed snapshot models, does not depend on FastAPI or HTTPX, does not access the filesystem, does not access the network, does not mutate the input snapshot, and never fetches additional repository content. Patch evidence is sanitized so credential-like literal values and full suspicious source lines are not returned.
 
 Signals are aggregated by stable rule ID. Affected files and evidence are deduplicated and sorted before serialization. The summary reports counts and high-attention files, but it is not a file ranking and does not include any numerical risk score.
+
+## Scoring Engines
+
+The scoring engines live under `app/scoring/` and consume already-normalized in-memory domain models. They do not depend on FastAPI, HTTPX, environment variables, filesystem access, network access, repository checkout, repository execution, dependency installation, or additional GitHub requests.
+
+The merge-risk engine uses explicit rule-ID weights from `risk_rules.py`, applies group caps in a deterministic order, and returns `MergeRiskAssessment`. Group caps are centralized and total 100: change scope 20, sensitive systems 25, testing 15, CI 20, operational change 15, and code quality 5.
+
+The evidence-confidence engine uses snapshot completeness, patch visibility, CI visibility, and classification coverage. It returns `EvidenceConfidenceAssessment` and never changes merge risk. CI outcome affects merge risk only through explicit review signals; CI visibility affects evidence confidence.
+
+Scoring runs after review-signal detection and signal summary generation:
+
+```text
+GitHub data
+-> normalized snapshot
+-> CI normalization
+-> file classification
+-> review signals
+-> signal summary
+-> merge-risk engine
+-> evidence-confidence engine
+-> PullRequestSnapshot response
+```
+
+There is no circular dependency between signal detection and scoring. Signals remain independently visible in the response, and scoring does not mutate signal collections.
 
 ## Parser Service
 
@@ -127,8 +154,8 @@ Planned backend areas:
 
 - Repository policy parsing.
 - CODEOWNERS evaluation.
-- Risk signal calculation.
-- Evidence confidence scoring.
+- Merge-readiness decision logic.
+- File prioritization and report exploration.
 - Report serialization.
 
 Planned infrastructure such as PostgreSQL, Redis, background workers, GitHub OAuth, GitHub App flows, and webhooks is intentionally excluded from this foundation.

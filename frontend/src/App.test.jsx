@@ -40,7 +40,19 @@ function snapshotResponse(overrides = {}) {
       base_branch: { ref: "main" },
       head_branch: { ref: "feature/analysis" },
     },
-    files: [],
+    classification_summary: {
+      total_files: 3,
+      classified_files: 3,
+      unknown_files: 0,
+      counts_by_kind: [{ name: "source", count: 2 }, { name: "configuration", count: 1 }],
+      warnings: ["Classification is path-based."],
+    },
+    files: [
+      {
+        filename: "backend/app/security/secrets.py",
+        patch: "+password = 'not-a-real-secret-fixture'",
+      },
+    ],
     ci: { state: "passing", visibility: "complete" },
     signal_summary: { total_signals: 2 },
     signals: [
@@ -64,16 +76,43 @@ function snapshotResponse(overrides = {}) {
     merge_readiness: {
       decision: "ready_with_caution",
       decisive_rule_id: "readiness.caution.patch_visibility_partial",
+      reasons: [
+        {
+          rule_id: "readiness.caution.patch_visibility_partial",
+          title: "Patch visibility is partial",
+          effect: "caution",
+          explanation: "Evidence confidence reports partial patch visibility.",
+        },
+      ],
       limitations: ["Human review remains necessary."],
     },
     merge_risk: {
       score: 42,
       level: "moderate",
+      group_scores: [
+        { group: "change_scope", applied_points: 12, cap: 20 },
+        { group: "sensitive_systems", applied_points: 20, cap: 25 },
+      ],
+      contributions: [
+        {
+          signal_id: "sig-security",
+          rule_id: "security.credential_like_literal_added",
+          title: "Credential-like literal pattern added",
+          severity: "high",
+          applied_points: 20,
+          raw_points: 20,
+          explanation: "Sanitized security contribution.",
+        },
+      ],
       limitations: ["Merge risk is a deterministic heuristic, not a probability."],
     },
     evidence_confidence: {
       score: 86,
       level: "high",
+      components: [
+        { id: "patch_visibility", name: "Patch visibility", awarded_points: 18, maximum_points: 25, status: "partial" },
+        { id: "ci_visibility", name: "CI visibility", awarded_points: 15, maximum_points: 15, status: "complete" },
+      ],
       limitations: ["Evidence confidence measures visibility and completeness, not code quality."],
     },
     ranked_files: [
@@ -83,6 +122,15 @@ function snapshotResponse(overrides = {}) {
         score: 76,
         level: "very_high",
         primary_kind: "source",
+        language: "python",
+        status: "modified",
+        additions: 10,
+        deletions: 4,
+        areas: ["security", "backend"],
+        related_signal_ids: ["sig-security"],
+        factors: [{ id: "signal.security.credential_like_literal_added", points: 25, description: "Credential-like literal pattern affected this file." }],
+        limitations: ["Ranking does not replace human review."],
+        classification: { matches: [{ rule_id: "area.security.segment", description: "Security-related path segment." }] },
         changes: 14,
       },
       {
@@ -91,10 +139,35 @@ function snapshotResponse(overrides = {}) {
         score: 45,
         level: "high",
         primary_kind: "configuration",
+        language: "python",
+        status: "modified",
+        additions: 15,
+        deletions: 3,
+        areas: ["configuration", "backend"],
+        related_signal_ids: ["sig-config"],
+        factors: [{ id: "sensitive_area.configuration", points: 5, description: "File is classified in the configuration area." }],
+        limitations: [],
         changes: 18,
       },
+      {
+        rank: 3,
+        path: "backend/app/auth/roles.py",
+        previous_path: "tests/test_roles.py",
+        score: 38,
+        level: "medium",
+        primary_kind: "source",
+        language: "python",
+        status: "renamed",
+        additions: 8,
+        deletions: 2,
+        changes: 10,
+        areas: ["authentication", "backend"],
+        related_signal_ids: [],
+        factors: [{ id: "rename_transition.moved_into_sensitive_area", points: 5, description: "File moved into a sensitive classified area." }],
+        limitations: [],
+        previous_classification: { primary_kind: "test", areas: ["testing"] },
+      },
     ],
-    review_action_summary: { total_actions: 2 },
     review_actions: [
       {
         id: "action.verify_credential_like_literal",
@@ -117,7 +190,12 @@ function snapshotResponse(overrides = {}) {
         evidence: ["Lower-ranked files must not be ignored."],
       },
     ],
+    file_priority_summary: { limitations: ["A low-priority file must not be ignored."] },
+    review_action_summary: { total_actions: 2, limitations: ["Actions are deterministic review prompts, not AI commentary."] },
     completeness: {
+      files_complete: true,
+      commits_complete: true,
+      missing_patch_count: 1,
       warnings: ["One or more changed files do not include patch data from GitHub."],
     },
     ...overrides,
@@ -224,11 +302,112 @@ describe("App", () => {
     expect(screen.getByText("Ready With Caution")).toBeInTheDocument();
     expect(screen.getByText("42/100")).toBeInTheDocument();
     expect(screen.getByText("86/100")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
     expect(screen.getAllByText("backend/app/security/secrets.py").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("tab", { name: "Review actions" }));
     expect(screen.getByText("Verify credential-like literal")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Review signals" }));
     expect(screen.getByText("Credential-like literal pattern added")).toBeInTheDocument();
     expect(screen.queryByText("not-a-real-secret-fixture")).not.toBeInTheDocument();
     expect(screen.queryByText(/password =/i)).not.toBeInTheDocument();
+  });
+
+  it("navigates report sections and renders overview breakdowns", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByText("Risk group breakdown")).toBeInTheDocument();
+    expect(screen.getByText("Confidence components")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Evidence and limitations" }));
+    expect(screen.getByText("Readiness reasons")).toBeInTheDocument();
+    expect(screen.getByText("Risk contributions")).toBeInTheDocument();
+    expect(screen.getByText("Classification summary")).toBeInTheDocument();
+  });
+
+  it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(await screen.findByRole("tab", { name: "Files" }));
+
+    expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
+    expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Priority"), "medium");
+    expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
+    expect(screen.queryByText("backend/app/security/secrets.py")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.type(screen.getByLabelText("Search path"), "runtime");
+    expect(screen.getByText("backend/app/config/runtime.py")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Search path"));
+    await user.selectOptions(screen.getByLabelText("Kind"), "configuration");
+    expect(screen.getByText("backend/app/config/runtime.py")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.selectOptions(screen.getByLabelText("Area"), "authentication");
+    expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.selectOptions(screen.getByLabelText("Status"), "renamed");
+    expect(screen.getByText(/Renamed from tests\/test_roles.py/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.selectOptions(screen.getByLabelText("Sort"), "path");
+    expect(screen.getAllByRole("button", { name: "Details" })).toHaveLength(3);
+
+    await user.click(screen.getAllByRole("button", { name: "Details" })[0]);
+    expect(screen.getByRole("dialog", { name: /backend\/app/i })).toBeInTheDocument();
+    expect(screen.getByText("Priority factors")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows empty file filter results", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(await screen.findByRole("tab", { name: "Files" }));
+    await user.type(screen.getByLabelText("Search path"), "no-match");
+
+    expect(screen.getByText("No files match the current filters.")).toBeInTheDocument();
+  });
+
+  it("filters review signals and review actions", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    await user.click(await screen.findByRole("tab", { name: "Review signals" }));
+    await user.selectOptions(screen.getByLabelText("Severity"), "medium");
+    expect(screen.getByText("Runtime configuration paths changed")).toBeInTheDocument();
+    expect(screen.queryByText("Credential-like literal pattern added")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.type(screen.getByLabelText("Affected file"), "secrets");
+    expect(screen.getByText("Credential-like literal pattern added")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Review actions" }));
+    expect(screen.getByText(/not automated fixes or reviewer assignments/i)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Priority"), "low");
+    expect(screen.getByText("Review highest-priority files")).toBeInTheDocument();
+    expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();
   });
 
   it("renders backend errors and retries with the preserved URL", async () => {

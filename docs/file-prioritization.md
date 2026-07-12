@@ -41,3 +41,7 @@ Files are ordered by score descending, priority level descending, changed-line c
 ## Non-Goals
 
 File prioritization does not provide recommendations, reviewer suggestions, CODEOWNERS evaluation, repository policy evaluation, automatic code modification, generated fixes, or generic AI code-review commentary.
+
+## Review Actions
+
+Review actions are built after file prioritization. The baseline file-review action may include the top five ranked files as a review-order summary, but it must not claim that omitted or lower-ranked files can be ignored. See [Review actions](review-actions.md).

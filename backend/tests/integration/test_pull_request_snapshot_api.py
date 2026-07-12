@@ -34,6 +34,7 @@ from app.errors import (
 from app.file_priority import calculate_file_priorities
 from app.main import create_app
 from app.readiness import calculate_merge_readiness
+from app.review_actions import build_review_actions
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.file_classifier import classify_changed_files
 from app.signals.engine import analyze_snapshot_signals
@@ -201,10 +202,17 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
     )
     snapshot = snapshot.model_copy(update={"merge_readiness": calculate_merge_readiness(snapshot)})
     ranked_files, file_priority_summary = calculate_file_priorities(snapshot)
-    return snapshot.model_copy(
+    snapshot = snapshot.model_copy(
         update={
             "ranked_files": ranked_files,
             "file_priority_summary": file_priority_summary,
+        }
+    )
+    review_actions, review_action_summary = build_review_actions(snapshot)
+    return snapshot.model_copy(
+        update={
+            "review_actions": review_actions,
+            "review_action_summary": review_action_summary,
         }
     )
 
@@ -348,12 +356,20 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["file_priority_summary"]["total_files"] == 2
     assert data["file_priority_summary"]["rules_version"] == "v1"
     assert len(data["file_priority_summary"]["highest_priority_files"]) == 2
+    assert "review_actions" in data
+    assert "review_action_summary" in data
+    assert data["review_action_summary"]["total_actions"] == len(data["review_actions"])
+    assert data["review_action_summary"]["rules_version"] == "v1"
+    assert "action.inspect_incomplete_evidence" in [action["rule_id"] for action in data["review_actions"]]
+    assert "action.review_highest_priority_files" in [action["rule_id"] for action in data["review_actions"]]
     assert "risk_score" not in data
     assert "merge_decision" not in data
     assert "blockers" not in data
     assert "recommendations" not in data
     assert "reviewers" not in data
     assert "required_reviewers" not in data
+    assert "assigned_reviewer" not in str(data)
+    assert "generated_patch" not in str(data)
     assert data["completeness"]["missing_patch_count"] == 1
     assert data["rate_limit"]["remaining"] == 4998
     assert fake.references[0].canonical_url == "https://github.com/octocat/Hello-World/pull/42"
@@ -520,6 +536,11 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "FilePrioritySummary" in schemas
     assert "FilePriorityCount" in schemas
     assert "FilePriorityLevel" in schemas
+    assert "ReviewAction" in schemas
+    assert "ReviewActionSummary" in schemas
+    assert "ReviewActionCount" in schemas
+    assert "ReviewActionPriority" in schemas
+    assert "ReviewActionCategory" in schemas
     assert "MergeRiskLevel" in schemas
     assert "EvidenceConfidenceLevel" in schemas
     assert "RiskGroup" in schemas
@@ -534,4 +555,7 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "recommendations" not in str(document)
     assert "required_reviewers" not in str(document)
     assert "reviewer_suggestions" not in str(document)
+    assert "assigned_reviewer" not in str(document)
+    assert "generated_patch" not in str(document)
+    assert "probability" not in str(document)
     assert "approval_state" not in str(document)

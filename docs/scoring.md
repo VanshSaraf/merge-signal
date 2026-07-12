@@ -250,7 +250,9 @@ Snapshot responses include merge readiness as a separate assessment built after 
 
 Snapshot responses also include deterministic file priority as a separate changed-file ranking built after readiness. File priority does not change merge risk, evidence confidence, or readiness, and a high-priority file is not proof of a defect. See [File prioritization](file-prioritization.md) for factor groups and ordering.
 
-The snapshot response does not include recommendations, required reviewers, approval state, CODEOWNERS results, repository policy results, generated fixes, or probability claims.
+Snapshot responses include deterministic review actions built after file priority. Actions may reference risk contributions indirectly through explicit signal and readiness rules, but they are not created from every risk contribution automatically. See [Review actions](review-actions.md).
+
+The snapshot response does not include required reviewers, approval state, CODEOWNERS results, repository policy results, generated fixes, code replacements, merge commands, or probability claims.
 
 ## Determinism And Boundaries
 
@@ -264,4 +266,4 @@ Tests cover enum serialization, score bounds, invalid point combinations, risk r
 
 ## Future Extension Boundaries
 
-Future milestones may add CODEOWNERS, repository policies, required-check inference, CLI output, polished frontend reporting, or GitHub App publishing. Those features should consume the existing scoring, readiness, and file-priority output through explicit models rather than changing the meaning of merge risk or evidence confidence.
+Future milestones may add CODEOWNERS, repository policies, required-check inference, CLI output, polished frontend reporting, or GitHub App publishing. Those features should consume the existing scoring, readiness, file-priority, and review-action output through explicit models rather than changing the meaning of merge risk or evidence confidence.

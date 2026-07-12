@@ -18,6 +18,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/scoring/` contains deterministic merge-risk and evidence-confidence engines, rule weights, group caps, thresholds, and ordering helpers.
 - `app/readiness/` contains deterministic merge-readiness rule metadata, precedence, suppression, and evaluation.
 - `app/file_priority/` contains deterministic changed-file review-priority rules, factor caps, ordering, and summary generation.
+- `app/review_actions/` contains deterministic review-action rules, ordering, aggregation, suppression, and summary generation.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -44,13 +45,14 @@ HTTP request
 -> evidence-confidence engine
 -> merge-readiness engine
 -> file-priority engine
+-> review-action engine
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include recommendations, required reviewers, approval state, CODEOWNERS results, or repository policy results.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, approval state, CODEOWNERS results, repository policy results, generated patches, or merge commands.
 
 ## File Classification Service
 
@@ -87,6 +89,7 @@ GitHub data
 -> evidence-confidence engine
 -> merge-readiness engine
 -> file-priority engine
+-> review-action engine
 -> PullRequestSnapshot response
 ```
 
@@ -103,6 +106,12 @@ The engine returns exactly one decision: `ready`, `ready_with_caution`, `not_rea
 The file-priority engine lives under `app/file_priority/` and consumes the in-memory snapshot after readiness has been calculated. It returns `ranked_files` and `file_priority_summary`, and it does not change classifications, review signals, merge risk, evidence confidence, readiness, CI, or completeness.
 
 File priority is separate from merge risk. It is a deterministic review-ordering heuristic for changed files, not a probability, defect score, recommendation engine, reviewer assignment engine, CODEOWNERS evaluator, or policy evaluator. It performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
+
+## Review-Action Engine
+
+The review-action engine lives under `app/review_actions/` and consumes the completed in-memory snapshot after file prioritization. It returns `review_actions` and `review_action_summary`, and it does not mutate signals, readiness reasons, risk contributions, confidence components, ranked files, CI, completeness, or classifications.
+
+Review actions are deterministic human-review prompts, not AI commentary, generated fixes, reviewer assignments, or probability claims. The engine uses explicit rule IDs only, aggregates related evidence, suppresses repetitive CI and testing prompts, sanitizes security evidence, and performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
 
 ## Parser Service
 
@@ -173,7 +182,7 @@ Planned backend areas:
 - Repository policy parsing.
 - CODEOWNERS evaluation.
 - Report exploration.
-- Recommended reviewer actions.
+- Reviewer assignment and repository-policy actions.
 - Report serialization.
 
 Planned infrastructure such as PostgreSQL, Redis, background workers, GitHub OAuth, GitHub App flows, and webhooks is intentionally excluded from this foundation.

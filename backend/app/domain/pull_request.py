@@ -11,6 +11,7 @@ from app.domain.file_classification import (
 )
 from app.domain.file_priority import FilePrioritySummary, RankedFile
 from app.domain.review_signal import ReviewSignal, ReviewSignalSummary
+from app.domain.review_action import ReviewAction, ReviewActionSummary
 from app.domain.readiness import (
     DecisionEffect,
     DecisionReason,
@@ -221,6 +222,23 @@ def empty_file_priority_summary() -> FilePrioritySummary:
     )
 
 
+def empty_review_action_summary() -> ReviewActionSummary:
+    return ReviewActionSummary(
+        total_actions=0,
+        counts_by_priority=[],
+        counts_by_category=[],
+        affected_file_count=0,
+        high_priority_action_count=0,
+        rules_version="v1",
+        limitations=[
+            "Actions are deterministic review prompts, not AI commentary.",
+            "Actions do not prove a defect.",
+            "Actions do not modify code or assign reviewers.",
+            "Human judgment remains required.",
+        ],
+    )
+
+
 class PullRequestMetadata(StrictDomainModel):
     number: int = Field(description="Pull-request number.")
     title: str = Field(description="Pull-request title.")
@@ -390,6 +408,14 @@ class PullRequestSnapshot(StrictDomainModel):
     file_priority_summary: FilePrioritySummary = Field(
         default_factory=empty_file_priority_summary,
         description="Summary of deterministic changed-file review priorities.",
+    )
+    review_actions: list[ReviewAction] = Field(
+        default_factory=list,
+        description="Deterministic human review actions derived from snapshot evidence.",
+    )
+    review_action_summary: ReviewActionSummary = Field(
+        default_factory=empty_review_action_summary,
+        description="Summary of deterministic review actions.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

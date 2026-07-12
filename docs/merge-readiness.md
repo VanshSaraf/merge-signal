@@ -86,7 +86,7 @@ Each reason includes:
 - `explanation`
 - `limitations`
 
-Related signal IDs and affected files are deduplicated and sorted. Reasons do not contain recommendations, reviewer suggestions, raw source lines, suspected credential values, stack traces, probability fields, or file-priority ranking.
+Related signal IDs and affected files are deduplicated and sorted. Reasons do not contain reviewer suggestions, raw source lines, suspected credential values, stack traces, probability fields, file-priority ranking, or review actions.
 
 ## Suppression
 
@@ -130,7 +130,7 @@ The current readiness rules version is `v1`. Rule changes that alter decision se
 
 Ready does not mean safe or bug-free. Blocked does not describe every possible repository policy gate. Not ready does not imply the pull request is incorrect. Ready with caution does not prescribe an action.
 
-File-priority ranking is calculated after readiness and does not change the readiness decision. No recommendation engine exists yet. No CODEOWNERS or policy evaluation exists yet.
+File-priority ranking and review actions are calculated after readiness and do not change the readiness decision. Review actions are deterministic prompts, not proof of defects or generated fixes. No reviewer assignment engine exists yet. No CODEOWNERS or policy evaluation exists yet.
 
 ## Testing Strategy
 
@@ -138,4 +138,4 @@ Tests cover domain validation, enum serialization, blocking rules, not-ready rul
 
 ## Future Boundaries
 
-Future milestones may add recommended reviewer actions, CODEOWNERS, repository policy configuration, history and comparison, GitHub App integration, and polished frontend reporting. Those features should consume readiness output through explicit models rather than changing the meaning of the four readiness decisions.
+Future milestones may add reviewer assignment, CODEOWNERS, repository policy configuration, history and comparison, GitHub App integration, and polished frontend reporting. Those features should consume readiness output through explicit models rather than changing the meaning of the four readiness decisions.

@@ -43,6 +43,7 @@ from app.integrations.github.models import (
 from app.integrations.github.pagination import parse_next_link
 from app.file_priority import calculate_file_priorities
 from app.readiness import calculate_merge_readiness
+from app.review_actions import build_review_actions
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
@@ -242,10 +243,17 @@ class GitHubRestClient:
             }
         )
         ranked_files, file_priority_summary = calculate_file_priorities(scored_snapshot)
-        return scored_snapshot.model_copy(
+        scored_snapshot = scored_snapshot.model_copy(
             update={
                 "ranked_files": ranked_files,
                 "file_priority_summary": file_priority_summary,
+            }
+        )
+        review_actions, review_action_summary = build_review_actions(scored_snapshot)
+        return scored_snapshot.model_copy(
+            update={
+                "review_actions": review_actions,
+                "review_action_summary": review_action_summary,
             }
         )
 

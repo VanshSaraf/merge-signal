@@ -3,6 +3,13 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
+from app.domain.file_classification import (
+    FileClassification,
+    FileClassificationSummary,
+    FileKind,
+    FileLanguage,
+)
+
 
 class StrictDomainModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -27,6 +34,16 @@ class PullRequestBranch(StrictDomainModel):
     ref: str = Field(description="Branch ref.")
     sha: str = Field(description="Branch commit SHA.")
     repository_full_name: str = Field(description="Repository full name for the branch.")
+
+
+def unknown_file_classification() -> FileClassification:
+    return FileClassification(
+        primary_kind=FileKind.UNKNOWN,
+        areas=[],
+        language=FileLanguage.UNKNOWN,
+        matches=[],
+        warnings=["No explicit file-kind rule matched.", "No explicit language rule matched."],
+    )
 
 
 class PullRequestMetadata(StrictDomainModel):
@@ -62,6 +79,14 @@ class ChangedFile(StrictDomainModel):
     patch: str | None = Field(description="Patch text when GitHub provides it.")
     previous_filename: str | None = Field(description="Previous path for renamed files.")
     blob_url: str | None = Field(description="GitHub blob URL when available.")
+    classification: FileClassification = Field(
+        default_factory=unknown_file_classification,
+        description="Deterministic classification of the current file path.",
+    )
+    previous_classification: FileClassification | None = Field(
+        default=None,
+        description="Deterministic classification of the previous file path for renamed files.",
+    )
 
 
 class PullRequestCommit(StrictDomainModel):
@@ -160,6 +185,9 @@ class PullRequestSnapshot(StrictDomainModel):
     files: list[ChangedFile] = Field(description="Changed files in GitHub order.")
     commits: list[PullRequestCommit] = Field(description="Commits in GitHub order.")
     ci: PullRequestCi = Field(description="Read-only CI visibility for the pull-request head SHA.")
+    classification_summary: FileClassificationSummary = Field(
+        description="Pull-request-level summary of changed-file classifications."
+    )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")
     rate_limit: GitHubRateLimit = Field(description="Latest available GitHub rate-limit metadata.")

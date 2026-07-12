@@ -42,6 +42,7 @@ from app.integrations.github.models import (
 )
 from app.integrations.github.pagination import parse_next_link
 from app.services.ci_state import aggregate_ci_state
+from app.services.file_classifier import classify_changed_files
 
 SleepCallable = Callable[[float], Awaitable[None]]
 
@@ -202,6 +203,7 @@ class GitHubRestClient:
     ) -> PullRequestSnapshot:
         metadata = await self.get_pull_request(reference)
         files = await self.list_pull_request_files(reference)
+        files, classification_summary = classify_changed_files(files)
         commits = await self.list_pull_request_commits(reference)
         ci = await self.get_pull_request_ci(reference, metadata.head_sha)
         completeness = self._build_completeness(metadata, files, commits)
@@ -212,6 +214,7 @@ class GitHubRestClient:
             files=files,
             commits=commits,
             ci=ci,
+            classification_summary=classification_summary,
             completeness=completeness,
             fetched_at=datetime.now(UTC),
             rate_limit=self._latest_rate_limit,

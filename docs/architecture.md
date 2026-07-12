@@ -13,7 +13,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/api/health.py` owns the health endpoint.
 - `app/api/v1/` owns versioned API routes.
 - `app/domain/` contains domain models that do not depend on FastAPI route code.
-- `app/services/` contains application services such as PR URL parsing.
+- `app/services/` contains application services such as PR URL parsing, CI aggregation, and file classification.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -29,6 +29,9 @@ HTTP request
 -> PR URL parser service
 -> PullRequestReference domain model
 -> GitHub REST client when snapshot data is requested
+-> changed-file retrieval
+-> deterministic classification of changed-file path strings
+-> commit retrieval
 -> current head SHA from pull-request metadata
 -> check-run and commit-status retrieval for that head SHA
 -> normalized PullRequestSnapshot domain model
@@ -37,7 +40,13 @@ HTTP request
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, decisions, signals, or recommendations.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, decisions, signals, or recommendations.
+
+## File Classification Service
+
+The file classifier lives in `app/services/file_classifier.py` with rule data isolated in `app/services/file_classification_rules.py`. It accepts repository path strings from normalized changed files, returns strict domain models, and does not access the filesystem, network, repository contents, or local dependencies.
+
+Classification output includes primary file kind, functional areas, language, matched rule evidence, safe warnings, previous-path classification for renames, and a pull-request-level summary. This is snapshot metadata only; it is not a merge-readiness decision or risk score.
 
 ## Parser Service
 
@@ -84,7 +93,7 @@ GitHub integration code may depend on settings, transport models, domain models,
 
 The parse endpoint treats the incoming URL as untrusted input. It does not trim, repair, fetch, clone, execute, or install anything from the referenced repository.
 
-The snapshot endpoint may fetch public data from the configured GitHub REST API host after parsing succeeds. It does not clone repositories, execute repository code, install dependencies, or follow pagination links to unrelated hosts.
+The snapshot endpoint may fetch public data from the configured GitHub REST API host after parsing succeeds. It does not clone repositories, execute repository code, install dependencies, inspect repository files from disk, or follow pagination links to unrelated hosts.
 
 ## Frontend
 
@@ -105,7 +114,6 @@ Backend configuration is loaded with Pydantic settings using the `MERGE_SIGNAL_`
 
 Planned backend areas:
 
-- Deterministic file classification.
 - Signal detection.
 - Repository policy parsing.
 - CODEOWNERS evaluation.

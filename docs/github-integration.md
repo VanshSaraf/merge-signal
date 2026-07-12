@@ -2,7 +2,7 @@
 
 ## Current Capabilities
 
-MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser.
+MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser. Changed-file path strings are classified locally after GitHub file data is normalized.
 
 Supported input:
 
@@ -10,7 +10,7 @@ Supported input:
 https://github.com/{owner}/{repository}/pull/{pull_number}
 ```
 
-GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, and risk analysis are not implemented in this milestone.
+GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, signal detection, and risk analysis are not implemented in this milestone.
 
 ## Authentication
 
@@ -82,6 +82,8 @@ Malformed or absent rate-limit headers do not fail the request. The snapshot exp
 ## Completeness
 
 The snapshot reports completeness without claiming analysis. Missing file patches are allowed because GitHub may omit patches for binary or very large files. Missing patches increment `missing_patch_count` and add a warning.
+
+Changed-file classifications are based only on current and previous path strings. They do not require patch text, repository checkout, file-content retrieval, or dependency installation.
 
 Warnings are also added when GitHub reports a changed-file or commit count that differs from the retrieved lists.
 

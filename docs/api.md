@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, or merge-readiness decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, or merge-readiness decisions.
 
 Request:
 
@@ -133,7 +133,33 @@ Compact success response:
       "mergeable_state": null,
       "labels": ["backend"]
     },
-    "files": [],
+    "files": [
+      {
+        "filename": "backend/app/main.py",
+        "status": "modified",
+        "additions": 5,
+        "deletions": 1,
+        "changes": 6,
+        "patch": "@@ -1 +1 @@",
+        "previous_filename": null,
+        "blob_url": "https://github.com/owner/repository/blob/head/backend/app/main.py",
+        "classification": {
+          "primary_kind": "source",
+          "areas": ["backend"],
+          "language": "python",
+          "matches": [
+            {
+              "rule_id": "kind.source.extension",
+              "match_type": "extension",
+              "value": ".py",
+              "description": "Recognized source-code extension."
+            }
+          ],
+          "warnings": []
+        },
+        "previous_classification": null
+      }
+    ],
     "commits": [],
     "ci": {
       "state": "missing",
@@ -165,6 +191,18 @@ Compact success response:
         "resource": "core",
         "reset_at": "2026-07-03T11:00:00Z"
       }
+    },
+    "classification_summary": {
+      "total_files": 1,
+      "classified_files": 1,
+      "unknown_files": 0,
+      "counts_by_kind": [{"name": "source", "count": 1}],
+      "counts_by_area": [{"name": "backend", "count": 1}],
+      "counts_by_language": [{"name": "python", "count": 1}],
+      "renamed_files": 0,
+      "files_with_previous_classification": 0,
+      "files_without_patch": 0,
+      "warnings": []
     },
     "completeness": {
       "files_complete": true,
@@ -210,13 +248,20 @@ Snapshot components:
 
 - `reference`: normalized owner, repository, pull number, and canonical URL.
 - `metadata`: pull-request metadata reported by GitHub.
-- `files`: changed files in GitHub order.
+- `files`: changed files in GitHub order, each with deterministic current-path classification and previous-path classification for renames.
 - `commits`: commits in GitHub order.
 - `ci`: check runs, current commit statuses, aggregate CI state, visibility, counts, warnings, and CI completeness.
+- `classification_summary`: counts and warnings across changed-file classifications.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 
 CI state values are `passing`, `failing`, `pending`, `missing`, and `unknown`. CI visibility values are `complete`, `partial`, and `unavailable`.
+
+File kind values are `source`, `test`, `documentation`, `configuration`, `dependency_manifest`, `dependency_lockfile`, `database_migration`, `ci_configuration`, `infrastructure`, `generated`, `asset`, `binary`, and `unknown`.
+
+File area values are `frontend`, `backend`, `api`, `authentication`, `authorization`, `database`, `dependencies`, `ci_cd`, `infrastructure`, `testing`, `documentation`, `configuration`, `generated`, `security`, and `build_tooling`.
+
+File language values are `python`, `javascript`, `typescript`, `java`, `c`, `cpp`, `csharp`, `go`, `rust`, `ruby`, `php`, `kotlin`, `swift`, `scala`, `sql`, `shell`, `powershell`, `html`, `css`, `scss`, `less`, `json`, `yaml`, `toml`, `xml`, `markdown`, `dockerfile`, `terraform`, `protobuf`, `graphql`, and `unknown`.
 
 Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
 
@@ -252,6 +297,6 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 
 - PR existence is verified only when `/snapshot` calls GitHub.
 - No GitHub Enterprise support.
-- No file classification or CODEOWNERS parsing.
+- No CODEOWNERS parsing.
 - No required-check inference.
 - No merge risk or evidence confidence calculation yet.

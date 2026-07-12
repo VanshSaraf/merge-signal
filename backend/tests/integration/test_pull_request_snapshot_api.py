@@ -32,9 +32,33 @@ from app.errors import (
     INVALID_PULL_REQUEST_URL,
 )
 from app.main import create_app
+from app.services.file_classifier import classify_changed_files
 
 
 def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
+    files = [
+        ChangedFile(
+            filename="backend/app/main.py",
+            status="modified",
+            additions=5,
+            deletions=1,
+            changes=6,
+            patch="@@ -1 +1 @@",
+            previous_filename=None,
+            blob_url="https://github.com/octocat/Hello-World/blob/head/backend/app/main.py",
+        ),
+        ChangedFile(
+            filename="docs/old.md",
+            status="renamed",
+            additions=1,
+            deletions=1,
+            changes=2,
+            patch=None,
+            previous_filename="docs/legacy.md",
+            blob_url=None,
+        ),
+    ]
+    classified_files, classification_summary = classify_changed_files(files)
     return PullRequestSnapshot(
         reference=reference,
         metadata=PullRequestMetadata(
@@ -72,28 +96,7 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
             mergeable_state=None,
             labels=["backend"],
         ),
-        files=[
-            ChangedFile(
-                filename="backend/app/main.py",
-                status="modified",
-                additions=5,
-                deletions=1,
-                changes=6,
-                patch="@@ -1 +1 @@",
-                previous_filename=None,
-                blob_url="https://github.com/octocat/Hello-World/blob/head/backend/app/main.py",
-            ),
-            ChangedFile(
-                filename="docs/old.md",
-                status="renamed",
-                additions=1,
-                deletions=1,
-                changes=2,
-                patch=None,
-                previous_filename="docs/legacy.md",
-                blob_url=None,
-            ),
-        ],
+        files=classified_files,
         commits=[
             PullRequestCommit(
                 sha="commit-one",
@@ -168,6 +171,7 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
                 reset_at=datetime(2026, 7, 3, 11, 0, tzinfo=UTC),
             ),
         ),
+        classification_summary=classification_summary,
         completeness=SnapshotCompleteness(
             files_complete=True,
             commits_complete=True,
@@ -235,13 +239,28 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["metadata"]["title"] == "Improve merge signal collection"
     assert data["files"][1]["patch"] is None
     assert data["files"][1]["previous_filename"] == "docs/legacy.md"
+    assert data["files"][0]["classification"]["primary_kind"] == "source"
+    assert data["files"][0]["classification"]["language"] == "python"
+    assert data["files"][0]["classification"]["areas"] == ["backend"]
+    assert data["files"][1]["classification"]["primary_kind"] == "documentation"
+    assert data["files"][1]["classification"]["language"] == "markdown"
+    assert data["files"][1]["previous_classification"]["primary_kind"] == "documentation"
+    assert data["classification_summary"]["total_files"] == 2
+    assert data["classification_summary"]["renamed_files"] == 1
+    assert data["classification_summary"]["files_with_previous_classification"] == 1
+    assert data["classification_summary"]["files_without_patch"] == 1
+    assert {"name": "source", "count": 1} in data["classification_summary"]["counts_by_kind"]
+    assert {"name": "documentation", "count": 1} in data["classification_summary"]["counts_by_kind"]
     assert [commit["sha"] for commit in data["commits"]] == ["commit-one", "commit-two"]
     assert data["ci"]["state"] == "passing"
     assert data["ci"]["visibility"] == "complete"
     assert data["ci"]["check_runs"][0]["provider_slug"] == "github-actions"
     assert data["ci"]["commit_statuses"][0]["context"] == "build"
     assert "risk_score" not in data
+    assert "evidence_confidence" not in data
     assert "merge_decision" not in data
+    assert "recommendations" not in data
+    assert "ranked_files" not in data
     assert data["completeness"]["missing_patch_count"] == 1
     assert data["rate_limit"]["remaining"] == 4998
     assert fake.references[0].canonical_url == "https://github.com/octocat/Hello-World/pull/42"
@@ -386,5 +405,10 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
     assert "PullRequestCi" in schemas
     assert "CiState" in schemas
     assert "CiVisibility" in schemas
+    assert "FileClassification" in schemas
+    assert "FileClassificationSummary" in schemas
+    assert "FileKind" in schemas
+    assert "FileArea" in schemas
+    assert "FileLanguage" in schemas
     assert "FetchPullRequestSnapshotRequest" in schemas
     assert "FetchPullRequestSnapshotResponse" in schemas

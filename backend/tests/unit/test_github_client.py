@@ -547,6 +547,13 @@ def test_snapshot_fetches_ci_after_core_using_head_sha_and_latest_rate_limit() -
     assert "/repos/octocat/Hello-World/commits/head-sha/check-runs" in requested_paths
     assert "/repos/octocat/Hello-World/statuses/head-sha" in requested_paths
     assert snapshot.ci.state == "passing"
+    assert snapshot.files[0].classification.primary_kind == "source"
+    assert snapshot.files[0].classification.language == "python"
+    assert snapshot.files[1].previous_classification is not None
+    assert snapshot.files[1].previous_classification.primary_kind == "documentation"
+    assert snapshot.classification_summary.total_files == 3
+    assert snapshot.classification_summary.renamed_files == 1
+    assert snapshot.classification_summary.files_with_previous_classification == 1
     assert snapshot.rate_limit.remaining == 4995
     assert snapshot.ci.rate_limit is not None
     assert snapshot.ci.rate_limit.remaining == 4995

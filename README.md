@@ -1,6 +1,6 @@
 # MergeSignal
 
-MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, and read-only CI visibility for the pull-request head SHA.
+MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, GitHub REST data retrieval for public pull-request metadata, changed files, commits, read-only CI visibility for the pull-request head SHA, and deterministic changed-file classification.
 
 The pull-request analysis engine is intentionally not implemented yet.
 
@@ -97,6 +97,7 @@ npm audit --audit-level=moderate
 - [API](docs/api.md)
 - [GitHub integration](docs/github-integration.md)
 - [CI surface](docs/ci-surface.md)
+- [File classification](docs/file-classification.md)
 
 ## Environment Configuration
 
@@ -122,6 +123,6 @@ See `backend/.env.example` and `frontend/.env.example` for local defaults.
 
 ## Current Status
 
-Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, and retrieval of public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses. The next planned milestone is deterministic file classification and signal detection.
+Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, retrieval of public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, and deterministic path-based file classification. The next planned milestone is signal detection.
 
-This foundation does not include required-check inference, pull-request analysis, merge risk scoring, evidence confidence scoring, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.
+This foundation does not include required-check inference, pull-request analysis, merge risk scoring, evidence confidence scoring, generated fixes, generic AI code-review commentary, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.

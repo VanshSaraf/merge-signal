@@ -8,7 +8,7 @@ Pull requests can look easy to merge while still carrying hidden risk: sensitive
 
 The first version will analyze public GitHub pull requests using repository metadata, changed files, CODEOWNERS, branch and review policies, status checks, and explicit evidence available through supported GitHub surfaces. It will produce separate merge risk and evidence confidence outputs so teams can distinguish likely implementation risk from the strength of the supporting evidence.
 
-This task creates only the project foundation. It does not implement pull-request analysis.
+The current implementation includes the project foundation and deterministic public GitHub PR URL parsing. It does not implement live GitHub metadata retrieval or pull-request analysis.
 
 ## Non-Goals
 
@@ -33,8 +33,9 @@ This task creates only the project foundation. It does not implement pull-reques
 ## Planned Implementation Phases
 
 1. Project foundation: monorepo structure, backend and frontend shells, configuration, tests, and documentation.
-2. GitHub data ingestion: public pull-request metadata, changed files, checks, reviews, branch protection, and CODEOWNERS retrieval.
-3. Signal engine: deterministic rules for changed-file risk, policy gaps, review coverage, and test/check evidence.
-4. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
-5. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
-6. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.
+2. PR URL parsing: strict public GitHub pull-request URL parsing and canonical pull-request references.
+3. GitHub data ingestion: public pull-request metadata, changed files, checks, reviews, branch protection, and CODEOWNERS retrieval.
+4. Signal engine: deterministic rules for changed-file risk, policy gaps, review coverage, and test/check evidence.
+5. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
+6. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
+7. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.

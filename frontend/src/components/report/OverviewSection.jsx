@@ -7,6 +7,7 @@ import { ScoreBreakdown } from "./ScoreBreakdown.jsx";
 export function OverviewSection({ snapshot }) {
   return (
     <div className="report-section">
+      <ReadinessStatement snapshot={snapshot} />
       <AssessmentRow snapshot={snapshot} />
       <MetricGrid snapshot={snapshot} />
       <KeyEvidence snapshot={snapshot} />
@@ -22,23 +23,53 @@ export function OverviewSection({ snapshot }) {
   );
 }
 
+function ReadinessStatement({ snapshot }) {
+  const decision = titleCase(snapshot.merge_readiness?.decision);
+  const primaryReason = snapshot.merge_readiness?.reasons?.[0];
+  const reasonText = summarizeReason(primaryReason, snapshot);
+
+  return (
+    <section className="readiness-statement" aria-label="Readiness statement">
+      <p className="eyebrow">Primary assessment</p>
+      <h2>{decision}{reasonText ? ` because ${reasonText}.` : "."}</h2>
+      {primaryReason?.explanation && <p>{primaryReason.explanation}</p>}
+    </section>
+  );
+}
+
+function summarizeReason(reason, snapshot) {
+  if (!reason) return "";
+  const ruleId = reason.rule_id ?? "";
+  if (ruleId.includes("ci_failing") || snapshot.ci?.state === "failing") return "CI is failing";
+  if (ruleId.includes("merge_conflict")) return "a merge conflict is reported";
+  if (reason.title) return reason.title.replace(/\.$/, "").toLowerCase();
+  return ruleId.replace(/^readiness\.[^.]+\./, "").replaceAll("_", " ");
+}
+
 function AssessmentRow({ snapshot }) {
   return (
     <section className="assessment-row" aria-label="Primary assessment">
       <AssessmentTile label="Readiness" value={titleCase(snapshot.merge_readiness?.decision)} tone={toneForLevel(snapshot.merge_readiness?.decision)} detail={snapshot.merge_readiness?.decisive_rule_id} />
-      <AssessmentTile label="Merge risk" value={`${snapshot.merge_risk?.score ?? 0}/100`} tone={toneForLevel(snapshot.merge_risk?.level)} detail={titleCase(snapshot.merge_risk?.level)} />
-      <AssessmentTile label="Evidence confidence" value={`${snapshot.evidence_confidence?.score ?? 0}/100`} tone={toneForConfidence(snapshot.evidence_confidence?.level)} detail={titleCase(snapshot.evidence_confidence?.level)} />
+      <AssessmentTile label="Merge risk" value={`${snapshot.merge_risk?.score ?? 0}/100`} tone={toneForLevel(snapshot.merge_risk?.level)} detail={titleCase(snapshot.merge_risk?.level)} meter={snapshot.merge_risk?.score ?? 0} />
+      <AssessmentTile label="Evidence confidence" value={`${snapshot.evidence_confidence?.score ?? 0}/100`} tone={toneForConfidence(snapshot.evidence_confidence?.level)} detail={titleCase(snapshot.evidence_confidence?.level)} meter={snapshot.evidence_confidence?.score ?? 0} />
       <AssessmentTile label="CI" value={titleCase(snapshot.ci?.state)} tone={toneForLevel(snapshot.ci?.state)} detail={`Visibility: ${titleCase(snapshot.ci?.visibility)}`} />
     </section>
   );
 }
 
-function AssessmentTile({ label, value, tone, detail }) {
+function AssessmentTile({ label, value, tone, detail, meter }) {
   return (
     <article className="assessment-tile">
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <div className="assessment-tile__copy">
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
       <Badge tone={tone}>{detail}</Badge>
+      {meter != null && (
+        <div className="assessment-meter" aria-label={`${label} ${meter} of 100`}>
+          <span style={{ width: `${Math.min(100, Math.max(0, meter))}%` }} />
+        </div>
+      )}
     </article>
   );
 }

@@ -177,7 +177,10 @@ function snapshotResponse(overrides = {}) {
         priority: "high",
         category: "security",
         affected_files: ["backend/app/security/secrets.py"],
+        related_signal_ids: ["sig-security"],
+        related_readiness_rule_ids: ["readiness.not_ready.credential_like_literal"],
         evidence: ["Suspected values and full source lines are omitted."],
+        limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
       {
         id: "action.review_highest_priority_files",
@@ -187,7 +190,10 @@ function snapshotResponse(overrides = {}) {
         priority: "low",
         category: "file_review",
         affected_files: ["backend/app/security/secrets.py", "backend/app/config/runtime.py"],
+        related_signal_ids: [],
+        related_readiness_rule_ids: [],
         evidence: ["Lower-ranked files must not be ignored."],
+        limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
     ],
     file_priority_summary: { limitations: ["A low-priority file must not be ignored."] },
@@ -300,18 +306,30 @@ describe("App", () => {
 
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
     expect(screen.getByText("Improve merge signal collection")).toBeInTheDocument();
+    expect(screen.getByLabelText("Assessment summary")).toBeInTheDocument();
     expect(screen.getAllByText("Ready With Caution").length).toBeGreaterThan(0);
-    expect(screen.getByText("42/100")).toBeInTheDocument();
-    expect(screen.getByText("86/100")).toBeInTheDocument();
+    expect(screen.getAllByText("42/100").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("86/100").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
+    expect(screen.queryByLabelText("Assessment summary")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Compact assessment summary")).toHaveTextContent("Ready With Caution");
+    expect(screen.getByLabelText("Compact assessment summary")).toHaveTextContent("Risk 42");
+    expect(screen.getByLabelText("Compact assessment summary")).toHaveTextContent("Confidence 86");
+    expect(screen.getByLabelText("Compact assessment summary")).toHaveTextContent("CI Passing");
     expect(screen.getAllByText("backend/app/security/secrets.py").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("tab", { name: "Actions" }));
     expect(screen.getByText("Verify credential-like literal")).toBeInTheDocument();
+    expect(screen.queryByText("action.verify_credential_like_literal")).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "View details" })[0]);
+    expect(screen.getByText("action.verify_credential_like_literal")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Signals" }));
     expect(screen.getByText("Credential-like literal pattern added")).toBeInTheDocument();
+    expect(screen.queryByText("security.credential_like_literal_added")).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Technical details" })[0]);
+    expect(screen.getByText("security.credential_like_literal_added")).toBeInTheDocument();
     expect(screen.queryByText("not-a-real-secret-fixture")).not.toBeInTheDocument();
     expect(screen.queryByText(/password =/i)).not.toBeInTheDocument();
   });
@@ -330,6 +348,9 @@ describe("App", () => {
     expect(screen.getByText("Readiness reasons")).toBeInTheDocument();
     expect(screen.getByText("Risk contributions")).toBeInTheDocument();
     expect(screen.getByText("Classification summary")).toBeInTheDocument();
+    expect(screen.getAllByText("Analysis boundaries").length).toBeGreaterThan(0);
+    expect(screen.getByText("Score boundaries")).toBeInTheDocument();
+    expect(screen.getByText("Human review")).toBeInTheDocument();
   });
 
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
@@ -433,7 +454,84 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Evidence" })).toHaveAttribute("aria-selected", "true");
     });
-    expect(screen.getByText("Deduplicated limitations")).toBeInTheDocument();
+    expect(screen.getAllByText("Analysis boundaries").length).toBeGreaterThan(0);
+  });
+
+  it("replaces review actions when a new pull request analysis succeeds", async () => {
+    const user = userEvent.setup();
+    const secondUrl = "https://github.com/octocat/Hello-World/pull/43";
+    const secondSnapshot = snapshotResponse({
+      reference: {
+        owner: "octocat",
+        repository: "Hello-World",
+        pull_number: 43,
+        canonical_url: secondUrl,
+      },
+      metadata: {
+        ...snapshotResponse().metadata,
+        title: "Plain frontend cleanup",
+      },
+      signals: [],
+      signal_summary: { total_signals: 0 },
+      review_actions: [
+        {
+          id: "action.review_highest_priority_files",
+          rule_id: "action.review_highest_priority_files",
+          title: "Review highest-priority files",
+          description: "Use the highest-ranked changed files as a review-order starting point.",
+          priority: "low",
+          category: "file_review",
+          affected_files: ["frontend/src/App.jsx"],
+          related_signal_ids: [],
+          related_readiness_rule_ids: [],
+          evidence: ["Lower-ranked files must not be ignored."],
+          limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
+        },
+      ],
+      review_action_summary: { total_actions: 1, limitations: [] },
+      ranked_files: [
+        {
+          rank: 1,
+          path: "frontend/src/App.jsx",
+          score: 20,
+          level: "low",
+          primary_kind: "source",
+          language: "javascript",
+          status: "modified",
+          additions: 4,
+          deletions: 2,
+          changes: 6,
+          areas: ["frontend"],
+          related_signal_ids: [],
+          factors: [],
+          limitations: [],
+        },
+      ],
+    });
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      const snapshotCalls = global.fetch.mock.calls.filter(([calledUrl]) => String(calledUrl).includes("/snapshot")).length;
+      return okSnapshot(snapshotCalls === 1 ? snapshotResponse() : secondSnapshot);
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(await screen.findByRole("tab", { name: "Actions" }));
+    expect(screen.getByText("Verify credential-like literal")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("GitHub PR URL"));
+    await user.type(screen.getByLabelText("GitHub PR URL"), secondUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByText("Plain frontend cleanup")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Review highest-priority files")).toBeInTheDocument();
   });
 
   it("renders empty report section states and unknown enum fallbacks", async () => {
@@ -461,9 +559,9 @@ describe("App", () => {
 
     await screen.findAllByText("Needs Manual Review");
     expect(screen.getAllByText("Needs Manual Review").length).toBeGreaterThan(0);
-    expect(screen.getByText("Unmapped Level")).toBeInTheDocument();
-    expect(screen.getByText("Unknown Visibility")).toBeInTheDocument();
-    expect(screen.getByText("Not Observed")).toBeInTheDocument();
+    expect(screen.getAllByText("Unmapped Level").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unknown Visibility").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not Observed").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
     expect(screen.getByText("No files match the current filters.")).toBeInTheDocument();

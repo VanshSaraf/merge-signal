@@ -1,12 +1,14 @@
 import { Badge } from "../common/Badge.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
 import { toneForLevel } from "../../utils/status.js";
+import { AssessmentRail, AssessmentSummaryStrip } from "../report/AssessmentRail.jsx";
 import { ReportNavigation } from "../report/ReportNavigation.jsx";
 
 export function ReportShell({ snapshot, activeSection, onSectionChange, children }) {
   const metadata = snapshot.metadata;
   const reference = snapshot.reference;
   const readiness = snapshot.merge_readiness;
+  const isOverview = activeSection === "overview";
 
   return (
     <section className="report-shell" aria-label="Pull request analysis report">
@@ -38,11 +40,16 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
         <div><dt>Changed files</dt><dd>{formatNumber(metadata.changed_files)}</dd></div>
       </dl>
 
-      <div className="report-nav-sticky">
-        <ReportNavigation activeSection={activeSection} onSectionChange={onSectionChange} />
+      <div className={["report-console", isOverview ? "report-console--overview" : "report-console--compact"].join(" ")}>
+        <div className="report-nav-sticky">
+          <ReportNavigation activeSection={activeSection} onSectionChange={onSectionChange} />
+        </div>
+        <div className="report-console__main">
+          {!isOverview && <AssessmentSummaryStrip snapshot={snapshot} />}
+          {children}
+        </div>
+        {isOverview && <AssessmentRail snapshot={snapshot} />}
       </div>
-
-      {children}
     </section>
   );
 }

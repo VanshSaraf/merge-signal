@@ -256,7 +256,7 @@ def test_security_actions_are_distinct_and_sanitized() -> None:
     snapshot = analyzed_snapshot(
         [
             changed_file("backend/app/security/secrets.py", patch="+password = 'not-a-real-secret-fixture'\n"),
-            changed_file("backend/app/security/settings.py", patch="+DISABLE_SSL_VERIFY = true\n"),
+            changed_file("backend/app/security/settings.py", patch="+verify=False\n"),
         ]
     )
     actions = actions_by_rule(snapshot)
@@ -273,7 +273,7 @@ def test_required_signal_actions_are_emitted() -> None:
     snapshot = analyzed_snapshot(
         [
             changed_file("database/migrations/001_drop_users.sql", patch=None),
-            changed_file("backend/app/config/runtime.py"),
+            changed_file("backend/app/config/settings.py"),
             changed_file("package.json"),
             changed_file("infra/main.tf"),
             changed_file("backend/app/main.py", additions=600, deletions=500, changes=1100),
@@ -295,10 +295,39 @@ def test_required_signal_actions_are_emitted() -> None:
         "action.inspect_incomplete_evidence",
         "action.review_code_quality_hints",
         "action.review_generated_or_opaque_changes",
-        "action.review_sensitive_change_tests",
         "action.review_deleted_tests",
         "action.review_highest_priority_files",
     } <= set(actions)
+
+
+def test_plain_typescript_actions_are_traceable_and_do_not_emit_unrelated_sensitive_actions() -> None:
+    snapshot = analyzed_snapshot(
+        [
+            changed_file("frontend/src/components/PullRequestCard.tsx", additions=40, deletions=4, changes=44, patch="+export function PullRequestCard() {}\n"),
+            changed_file("frontend/src/hooks/usePullRequest.ts", additions=18, deletions=2, changes=20, patch="+export function usePullRequest() {}\n"),
+            changed_file("frontend/src/utils/formatPullRequest.ts", additions=12, deletions=3, changes=15, patch="+export function formatPullRequest() {}\n"),
+        ],
+        ci_state=CiState.FAILING,
+    )
+    actions, summary = build_review_actions(snapshot)
+    actions_by_id = {action.rule_id: action for action in actions}
+    forbidden_actions = {
+        "action.verify_credential_like_literal",
+        "action.verify_security_control_setting",
+        "action.inspect_destructive_migration",
+        "action.inspect_migration_without_patch",
+    }
+    signal_ids = {signal.id for signal in snapshot.signals}
+    changed_paths = {file.filename for file in snapshot.files}
+
+    assert "action.inspect_failing_ci" in actions_by_id
+    assert "action.review_production_change_tests" in actions_by_id
+    assert "action.review_highest_priority_files" in actions_by_id
+    assert forbidden_actions.isdisjoint(actions_by_id)
+    assert summary.total_actions == len(actions)
+    for action in actions:
+        assert set(action.related_signal_ids) <= signal_ids
+        assert set(action.affected_files) <= changed_paths
 
 
 def test_merge_conflict_destructive_migration_and_sensitive_rename_actions() -> None:

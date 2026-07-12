@@ -144,22 +144,23 @@ def _security_actions(
     reasons_by_rule: dict[str, list[str]],
     ranked_positions: dict[str, int],
 ) -> list[ReviewAction]:
-    return [
-        _action(
-            "action.verify_credential_like_literal",
-            signals_by_rule.get("security.credential_like_literal_added", []),
-            reasons_by_rule.get("readiness.not_ready.credential_like_literal", []),
-            ["A credential-like literal pattern was observed; suspected values and full source lines are omitted."],
-            ranked_positions,
+    return _actions_when_traceable(
+        (
+            (
+                "action.verify_credential_like_literal",
+                signals_by_rule.get("security.credential_like_literal_added", []),
+                reasons_by_rule.get("readiness.not_ready.credential_like_literal", []),
+                ["A credential-like literal pattern was observed; suspected values and full source lines are omitted."],
+            ),
+            (
+                "action.verify_security_control_setting",
+                signals_by_rule.get("security.security_control_disabled_hint", []),
+                reasons_by_rule.get("readiness.not_ready.security_control_disabled", []),
+                ["A security-control disabling pattern was observed; raw patch lines are omitted."],
+            ),
         ),
-        _action(
-            "action.verify_security_control_setting",
-            signals_by_rule.get("security.security_control_disabled_hint", []),
-            reasons_by_rule.get("readiness.not_ready.security_control_disabled", []),
-            ["A security-control disabling pattern was observed; raw patch lines are omitted."],
-            ranked_positions,
-        ),
-    ]
+        ranked_positions,
+    )
 
 
 def _database_actions(
@@ -167,22 +168,23 @@ def _database_actions(
     reasons_by_rule: dict[str, list[str]],
     ranked_positions: dict[str, int],
 ) -> list[ReviewAction]:
-    return [
-        _action(
-            "action.inspect_destructive_migration",
-            signals_by_rule.get("database.destructive_migration_hint", []),
-            reasons_by_rule.get("readiness.caution.destructive_migration_hint", []),
-            ["A destructive migration pattern was observed in GitHub-provided patch evidence."],
-            ranked_positions,
+    return _actions_when_traceable(
+        (
+            (
+                "action.inspect_destructive_migration",
+                signals_by_rule.get("database.destructive_migration_hint", []),
+                reasons_by_rule.get("readiness.caution.destructive_migration_hint", []),
+                ["A destructive migration pattern was observed in GitHub-provided patch evidence."],
+            ),
+            (
+                "action.inspect_migration_without_patch",
+                signals_by_rule.get("database.migration_without_patch_visibility", []),
+                [],
+                ["Patch-level migration inspection was unavailable for one or more migration files."],
+            ),
         ),
-        _action(
-            "action.inspect_migration_without_patch",
-            signals_by_rule.get("database.migration_without_patch_visibility", []),
-            [],
-            ["Patch-level migration inspection was unavailable for one or more migration files."],
-            ranked_positions,
-        ),
-    ]
+        ranked_positions,
+    )
 
 
 def _testing_actions(
@@ -190,22 +192,29 @@ def _testing_actions(
     reasons_by_rule: dict[str, list[str]],
     ranked_positions: dict[str, int],
 ) -> list[ReviewAction]:
-    return [
-        _action(
-            "action.review_sensitive_change_tests",
-            signals_by_rule.get("testing.sensitive_change_without_test_files", []),
-            reasons_by_rule.get("readiness.caution.sensitive_change_without_tests", []),
-            ["No test files changed in this PR."],
-            ranked_positions,
+    return _actions_when_traceable(
+        (
+            (
+                "action.review_sensitive_change_tests",
+                signals_by_rule.get("testing.sensitive_change_without_test_files", []),
+                reasons_by_rule.get("readiness.caution.sensitive_change_without_tests", []),
+                ["No test files changed in this PR."],
+            ),
+            (
+                "action.review_production_change_tests",
+                signals_by_rule.get("testing.production_change_without_test_files", []),
+                [],
+                ["No test files changed in this PR."],
+            ),
+            (
+                "action.review_deleted_tests",
+                signals_by_rule.get("testing.test_files_deleted", []),
+                reasons_by_rule.get("readiness.caution.test_files_deleted", []),
+                ["One or more changed files classified as tests were removed."],
+            ),
         ),
-        _action(
-            "action.review_deleted_tests",
-            signals_by_rule.get("testing.test_files_deleted", []),
-            reasons_by_rule.get("readiness.caution.test_files_deleted", []),
-            ["One or more changed files classified as tests were removed."],
-            ranked_positions,
-        ),
-    ]
+        ranked_positions,
+    )
 
 
 def _medium_signal_actions(
@@ -214,19 +223,17 @@ def _medium_signal_actions(
 ) -> list[ReviewAction]:
     large_scope_signals = [signal for rule_id in LARGE_SCOPE_SIGNAL_RULE_IDS for signal in signals_by_rule.get(rule_id, [])]
     sensitive_rename_signals = [signal for rule_id in SENSITIVE_RENAME_SIGNAL_RULE_IDS for signal in signals_by_rule.get(rule_id, [])]
-    return [
-        _action("action.review_runtime_configuration", signals_by_rule.get("configuration.runtime_configuration_changed", []), [], ["Runtime configuration paths changed."], ranked_positions),
-        _action(
-            "action.review_dependency_manifest",
-            [*signals_by_rule.get("dependencies.manifest_changed", []), *signals_by_rule.get("dependencies.manifest_without_lockfile", [])],
-            [],
-            ["Dependency manifest evidence was observed."],
-            ranked_positions,
+    dependency_signals = [*signals_by_rule.get("dependencies.manifest_changed", []), *signals_by_rule.get("dependencies.manifest_without_lockfile", [])]
+    return _actions_when_traceable(
+        (
+            ("action.review_runtime_configuration", signals_by_rule.get("configuration.runtime_configuration_changed", []), [], ["Runtime configuration paths changed."]),
+            ("action.review_dependency_manifest", dependency_signals, [], ["Dependency manifest evidence was observed."]),
+            ("action.review_infrastructure_change", signals_by_rule.get("infrastructure.configuration_changed", []), [], ["Infrastructure or deployment configuration paths changed."]),
+            ("action.review_large_change_scope", large_scope_signals, [], ["Large or broad change-scope evidence was observed."]),
+            ("action.review_sensitive_rename", sensitive_rename_signals, [], ["A rename transition into a sensitive area or out of test classification was observed."]),
         ),
-        _action("action.review_infrastructure_change", signals_by_rule.get("infrastructure.configuration_changed", []), [], ["Infrastructure or deployment configuration paths changed."], ranked_positions),
-        _action("action.review_large_change_scope", large_scope_signals, [], ["Large or broad change-scope evidence was observed."], ranked_positions),
-        _action("action.review_sensitive_rename", sensitive_rename_signals, [], ["A rename transition into a sensitive area or out of test classification was observed."], ranked_positions),
-    ]
+        ranked_positions,
+    )
 
 
 def _incomplete_evidence_actions(
@@ -267,9 +274,23 @@ def _low_signal_actions(
 ) -> list[ReviewAction]:
     code_quality_signals = [signal for rule_id in CODE_QUALITY_SIGNAL_RULE_IDS for signal in signals_by_rule.get(rule_id, [])]
     generated_signals = [signal for rule_id in GENERATED_OR_OPAQUE_SIGNAL_RULE_IDS for signal in signals_by_rule.get(rule_id, [])]
+    return _actions_when_traceable(
+        (
+            ("action.review_code_quality_hints", code_quality_signals, [], ["Code-quality hint signals were observed."]),
+            ("action.review_generated_or_opaque_changes", generated_signals, [], ["Generated, large generated, opaque, or patchless-file evidence was observed."]),
+        ),
+        ranked_positions,
+    )
+
+
+def _actions_when_traceable(
+    specs: tuple[tuple[str, list[ReviewSignal], list[str], list[str]], ...],
+    ranked_positions: dict[str, int],
+) -> list[ReviewAction]:
     return [
-        _action("action.review_code_quality_hints", code_quality_signals, [], ["Code-quality hint signals were observed."], ranked_positions),
-        _action("action.review_generated_or_opaque_changes", generated_signals, [], ["Generated, large generated, opaque, or patchless-file evidence was observed."], ranked_positions),
+        _action(rule_id, signals, readiness_rule_ids, evidence, ranked_positions)
+        for rule_id, signals, readiness_rule_ids, evidence in specs
+        if signals or readiness_rule_ids
     ]
 
 

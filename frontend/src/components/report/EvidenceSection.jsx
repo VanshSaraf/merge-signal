@@ -59,11 +59,43 @@ export function EvidenceSection({ snapshot }) {
           <div><dt>Kinds</dt><dd>{compactList((snapshot.classification_summary?.counts_by_kind ?? []).map((item) => `${item.name}: ${item.count}`), 5)}</dd></div>
         </dl>
       </Card>
-      <Card title="Deduplicated limitations" eyebrow="Scope">
-        <ul className="limitation-list">
-          {limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
-        </ul>
+      <Card title="Analysis boundaries" eyebrow="Scope">
+        <div className="limitation-groups">
+          <LimitationGroup
+            title="Analysis boundaries"
+            items={[
+              "MergeSignal uses deterministic GitHub-visible evidence from the current snapshot.",
+              "Human review remains necessary for intent, correctness, and product judgment.",
+            ]}
+          />
+          <LimitationGroup
+            title="Score boundaries"
+            items={[
+              "Merge risk is a heuristic score, not a probability.",
+              "Evidence confidence measures visibility and completeness, not code quality.",
+            ]}
+          />
+          <LimitationGroup
+            title="Human review"
+            items={[
+              "Review actions are prompts for verification, not automated fixes.",
+              "Low-priority files must still be considered when reviewing the PR.",
+            ]}
+          />
+          {limitations.length > 0 && <LimitationGroup title="Source limitations" items={limitations} compact />}
+        </div>
       </Card>
     </div>
+  );
+}
+
+function LimitationGroup({ title, items, compact = false }) {
+  return (
+    <section className={compact ? "limitation-group limitation-group--compact" : "limitation-group"}>
+      <h3>{title}</h3>
+      <ul className="limitation-list">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </section>
   );
 }

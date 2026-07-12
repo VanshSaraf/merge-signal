@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">MergeSignal mark</title>
+  <desc id="desc">A custom rabbit-shaped merge signal mark with branch nodes and signal waves.</desc>
+  <path d="M22 78c0-25 18.8-45 42-45s42 20 42 45c0 19.1-16.9 33-42 33S22 97.1 22 78Z" fill="#0B1119" stroke="#314158" stroke-width="2"/>
+  <path d="M64 106c21 0 37-11.7 37-28.2 0-10.4-6.2-19.5-16-24.4L96.4 15 83.5 8.8 67.6 48h-7.2L44.5 8.8 31.6 15 43 53.4c-9.8 4.9-16 14-16 24.4C27 94.3 43 106 64 106Z" fill="#F8FAFC" stroke="#D9E2EF" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M48.5 72.5h31M51 84.5h26M52 61.5c3-2.6 7-4 12-4s9 1.4 12 4M45 21l11.5 28M83 21 71.5 49" stroke="#111827" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M37 42h22M69 42h22M91 42l-8-8M91 42l-8 8M45 95c11.8 7.2 26.2 7.2 38 0" stroke="#14B8A6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M101 57c7 5.6 11 13.3 11 21.8S108 95 101 100.6M27 57c-7 5.6-11 13.3-11 21.8S20 95 27 100.6" stroke="#3B82F6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="49" cy="69" r="3.7" fill="#2563EB"/>
+  <circle cx="79" cy="69" r="3.7" fill="#2563EB"/>
+  <circle cx="37" cy="42" r="4" fill="#22C55E"/>
+  <circle cx="64" cy="42" r="4" fill="#F59E0B"/>
+  <circle cx="91" cy="42" r="4" fill="#EF4444"/>
+</svg>

@@ -1,0 +1,74 @@
+<svg width="1280" height="420" viewBox="0 0 1280 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">MergeSignal project banner</title>
+  <desc id="desc">A premium developer-tool banner with the MergeSignal rabbit mark, merge branch nodes, signal waves, and wordmark.</desc>
+  <defs>
+    <linearGradient id="panel" x1="124" y1="56" x2="1132" y2="368" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset="0.52" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#07111B"/>
+    </linearGradient>
+    <linearGradient id="blueLine" x1="290" y1="210" x2="1060" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8" stop-opacity="0.1"/>
+      <stop offset="0.5" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0.15"/>
+    </linearGradient>
+    <radialGradient id="glowBlue" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(380 180) rotate(28) scale(380 190)">
+      <stop stop-color="#2563EB" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowTeal" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(940 250) rotate(155) scale(330 180)">
+      <stop stop-color="#14B8A6" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="0" y="0" width="1280" height="420" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="32" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect x="34" y="34" width="1212" height="352" rx="38" fill="url(#panel)" filter="url(#softShadow)"/>
+  <rect x="35" y="35" width="1210" height="350" rx="37" stroke="#334155" stroke-opacity="0.8" stroke-width="2"/>
+  <path d="M82 352C210 238 310 284 424 182C544 74 691 92 782 158C889 236 972 203 1198 84" stroke="url(#blueLine)" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M80 91C190 174 283 133 380 204C508 297 610 240 701 180C823 99 923 133 1200 313" stroke="#14B8A6" stroke-opacity="0.2" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="392" cy="184" rx="322" ry="168" fill="url(#glowBlue)"/>
+  <ellipse cx="933" cy="250" rx="300" ry="164" fill="url(#glowTeal)"/>
+  <g opacity="0.2">
+    <path d="M102 120h1050M102 170h1050M102 220h1050M102 270h1050M102 320h1050" stroke="#94A3B8" stroke-width="1"/>
+    <path d="M180 74v278M300 74v278M420 74v278M540 74v278M660 74v278M780 74v278M900 74v278M1020 74v278M1140 74v278" stroke="#94A3B8" stroke-width="1"/>
+  </g>
+  <g transform="translate(118 106)">
+    <path d="M20 108c0-46 34.6-83 77.4-83s77.4 37 77.4 83c0 35.2-31.1 60.8-77.4 60.8S20 143.2 20 108Z" fill="#0B1119" stroke="#314158" stroke-width="3"/>
+    <path d="M97.4 159.6c38.7 0 68.1-21.5 68.1-51.9 0-19.2-11.4-35.9-29.5-44.9l21-70.7-23.7-11.4L104 52.9H90.8L61.5-19.3 37.8-7.9l21 70.7C40.7 71.8 29.3 88.5 29.3 107.7c0 30.4 29.4 51.9 68.1 51.9Z" fill="#F8FAFC" stroke="#D9E2EF" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M68.9 98.4h57.1M73.5 120.5h47.9M75.4 78.1c5.5-4.8 12.9-7.4 22.1-7.4s16.6 2.6 22.1 7.4M62.4 3.6l21.2 51.6M132.4 3.6l-21.2 51.6" stroke="#111827" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M47.7 42.3h40.5M106.6 42.3h40.5M147.1 42.3l-14.7-14.7M147.1 42.3 132.4 57M62.4 139.8c21.7 13.3 48.3 13.3 70 0" stroke="#14B8A6" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M165.5 69.9c12.9 10.3 20.3 24.5 20.3 40.1s-7.4 29.8-20.3 40.1M29.3 69.9C16.4 80.2 9 94.4 9 110s7.4 29.8 20.3 40.1" stroke="#3B82F6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="69.8" cy="91.9" r="6.8" fill="#2563EB"/>
+    <circle cx="125" cy="91.9" r="6.8" fill="#2563EB"/>
+  </g>
+  <g transform="translate(385 103)">
+    <text x="0" y="72" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="72" font-weight="800" letter-spacing="-1">MergeSignal</text>
+    <text x="2" y="120" fill="#CBD5E1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="25" font-weight="500">Deterministic pull-request risk, readiness, and review intelligence.</text>
+    <g transform="translate(2 164)">
+      <rect x="0" y="0" width="178" height="40" rx="20" fill="#102033" stroke="#1D4ED8" stroke-opacity="0.65"/>
+      <circle cx="24" cy="20" r="6" fill="#22C55E"/>
+      <text x="42" y="27" fill="#DDE7F3" font-family="Inter, ui-sans-serif, system-ui" font-size="16" font-weight="700">Ready signals</text>
+      <rect x="194" y="0" width="154" height="40" rx="20" fill="#102033" stroke="#0F766E" stroke-opacity="0.65"/>
+      <circle cx="218" cy="20" r="6" fill="#F59E0B"/>
+      <text x="236" y="27" fill="#DDE7F3" font-family="Inter, ui-sans-serif, system-ui" font-size="16" font-weight="700">Risk score</text>
+      <rect x="364" y="0" width="198" height="40" rx="20" fill="#102033" stroke="#7F1D1D" stroke-opacity="0.55"/>
+      <circle cx="388" cy="20" r="6" fill="#EF4444"/>
+      <text x="406" y="27" fill="#DDE7F3" font-family="Inter, ui-sans-serif, system-ui" font-size="16" font-weight="700">Evidence trace</text>
+    </g>
+  </g>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M930 205h76c38 0 38-52 76-52h52" stroke="#3B82F6" stroke-width="5"/>
+    <path d="M1006 205c38 0 38 52 76 52h52" stroke="#14B8A6" stroke-width="5"/>
+    <circle cx="930" cy="205" r="9" fill="#22C55E"/>
+    <circle cx="1006" cy="205" r="9" fill="#F59E0B"/>
+    <circle cx="1134" cy="153" r="9" fill="#3B82F6"/>
+    <circle cx="1134" cy="257" r="9" fill="#EF4444"/>
+  </g>
+  <g opacity="0.65" stroke="#38BDF8" stroke-width="2" stroke-linecap="round">
+    <path d="M1095 78c20 17 32 40 32 66"/>
+    <path d="M1130 64c30 25 48 59 48 96"/>
+    <path d="M1166 51c39 32 62 76 62 125"/>
+  </g>
+</svg>

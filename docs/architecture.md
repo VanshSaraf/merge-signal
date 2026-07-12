@@ -29,13 +29,15 @@ HTTP request
 -> PR URL parser service
 -> PullRequestReference domain model
 -> GitHub REST client when snapshot data is requested
+-> current head SHA from pull-request metadata
+-> check-run and commit-status retrieval for that head SHA
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, commits, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include CI checks, risk scores, confidence scores, decisions, signals, or recommendations.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include risk scores, confidence scores, decisions, signals, or recommendations.
 
 ## Parser Service
 
@@ -48,6 +50,10 @@ Parsing and GitHub fetching are separated because URL shape validation is a loca
 GitHub-specific transport models live under `app/integrations/github/models.py` and ignore unknown upstream fields. Internal domain models remain strict and explicit. The route layer never returns raw GitHub dictionaries.
 
 `GitHubRestClient` owns one HTTPX `AsyncClient` for a complete snapshot request. FastAPI provides it through dependency injection, which lets tests replace the client without patching transport internals. The client closes owned HTTPX clients after the request lifecycle.
+
+CI retrieval uses only `metadata.head_sha`. Check runs are fetched from the commit check-runs endpoint and commit statuses from the commit statuses endpoint. The route layer does not pass arbitrary refs to CI retrieval.
+
+The CI aggregation service lives outside FastAPI. It reduces check-run outcomes and current commit-status contexts into state and visibility values without making merge-readiness claims. Partial CI-only failures can produce a successful snapshot with warnings, while authentication and rate-limit failures remain global errors.
 
 Pagination is centralized in `app/integrations/github/pagination.py`. Only safe `rel="next"` links on the configured API host are followed, repeated links are rejected, and `GITHUB_MAX_PAGES` bounds the flow.
 
@@ -99,8 +105,8 @@ Backend configuration is loaded with Pydantic settings using the `MERGE_SIGNAL_`
 
 Planned backend areas:
 
-- CI/check collection.
 - Deterministic file classification.
+- Signal detection.
 - Repository policy parsing.
 - CODEOWNERS evaluation.
 - Risk signal calculation.

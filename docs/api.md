@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, and commits from the GitHub REST API, and returns a normalized snapshot. This endpoint does not perform risk analysis, CI/check-run fetching, scoring, recommendations, or merge-readiness decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, and returns a normalized snapshot. This endpoint does not perform risk analysis, required-check inference, scoring, recommendations, or merge-readiness decisions.
 
 Request:
 
@@ -135,6 +135,37 @@ Compact success response:
     },
     "files": [],
     "commits": [],
+    "ci": {
+      "state": "missing",
+      "visibility": "complete",
+      "check_runs": [],
+      "commit_statuses": [],
+      "total_check_runs": 0,
+      "total_status_contexts": 0,
+      "passing_count": 0,
+      "failing_count": 0,
+      "pending_count": 0,
+      "neutral_count": 0,
+      "skipped_count": 0,
+      "warnings": [],
+      "fetched_at": "2026-07-03T10:00:00Z",
+      "completeness": {
+        "check_runs_complete": true,
+        "commit_statuses_complete": true,
+        "check_run_pages_fetched": 1,
+        "commit_status_pages_fetched": 1,
+        "raw_status_record_count": 0,
+        "unique_status_context_count": 0,
+        "warnings": []
+      },
+      "rate_limit": {
+        "limit": 5000,
+        "remaining": 4998,
+        "used": 2,
+        "resource": "core",
+        "reset_at": "2026-07-03T11:00:00Z"
+      }
+    },
     "completeness": {
       "files_complete": true,
       "commits_complete": true,
@@ -181,8 +212,17 @@ Snapshot components:
 - `metadata`: pull-request metadata reported by GitHub.
 - `files`: changed files in GitHub order.
 - `commits`: commits in GitHub order.
+- `ci`: check runs, current commit statuses, aggregate CI state, visibility, counts, warnings, and CI completeness.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
+
+CI state values are `passing`, `failing`, `pending`, `missing`, and `unknown`. CI visibility values are `complete`, `partial`, and `unavailable`.
+
+Normalized check-run fields include `id`, `name`, `status`, `conclusion`, provider name and slug, details URL, `started_at`, and `completed_at`.
+
+Normalized commit-status fields include `id`, `context`, `state`, `description`, `target_url`, `creator_login`, `created_at`, and `updated_at`. Repeated status contexts are reduced to the newest record for the exact context.
+
+`missing` means GitHub returned no CI records from both surfaces successfully. `unavailable` means MergeSignal could not observe either CI surface and must not claim CI is absent. Partial CI data is returned with warnings when one surface is unavailable.
 
 ## Supported URL Format
 
@@ -212,6 +252,6 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 
 - PR existence is verified only when `/snapshot` calls GitHub.
 - No GitHub Enterprise support.
-- No CI/check-run fetching.
 - No file classification or CODEOWNERS parsing.
+- No required-check inference.
 - No merge risk or evidence confidence calculation yet.

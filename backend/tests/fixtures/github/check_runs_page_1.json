@@ -1,0 +1,50 @@
+{
+  "total_count": 6,
+  "check_runs": [
+    {
+      "id": 101,
+      "name": "unit tests",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-07-03T10:00:00Z",
+      "completed_at": "2026-07-03T10:03:00Z",
+      "details_url": "https://ci.example.test/unit",
+      "html_url": "https://github.com/octocat/Hello-World/runs/101",
+      "external_id": "unit-101",
+      "app": {
+        "name": "GitHub Actions",
+        "slug": "github-actions",
+        "html_url": "https://github.com/apps/github-actions"
+      },
+      "ignored": "field"
+    },
+    {
+      "id": 102,
+      "name": "lint",
+      "status": "completed",
+      "conclusion": "neutral",
+      "started_at": "2026-07-03T10:04:00Z",
+      "completed_at": "2026-07-03T10:05:00Z",
+      "details_url": null,
+      "html_url": null,
+      "external_id": null,
+      "app": null
+    },
+    {
+      "id": 103,
+      "name": "docs",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": null,
+      "completed_at": "2026-07-03T10:06:00Z",
+      "details_url": "https://ci.example.test/docs",
+      "html_url": null,
+      "external_id": "docs-103",
+      "app": {
+        "name": "Docs CI",
+        "slug": "docs-ci",
+        "html_url": null
+      }
+    }
+  ]
+}

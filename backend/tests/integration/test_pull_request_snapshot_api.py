@@ -6,7 +6,13 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_github_client
 from app.domain.pull_request import (
     ChangedFile,
+    CheckRunRecord,
+    CiCompleteness,
+    CiState,
+    CiVisibility,
+    CommitStatusRecord,
     GitHubRateLimit,
+    PullRequestCi,
     PullRequestAuthor,
     PullRequestBranch,
     PullRequestCommit,
@@ -108,6 +114,60 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
                 committed_at=datetime(2026, 7, 1, 12, 5, tzinfo=UTC),
             ),
         ],
+        ci=PullRequestCi(
+            state=CiState.PASSING,
+            visibility=CiVisibility.COMPLETE,
+            check_runs=[
+                CheckRunRecord(
+                    id=101,
+                    name="unit tests",
+                    status="completed",
+                    conclusion="success",
+                    provider_name="GitHub Actions",
+                    provider_slug="github-actions",
+                    details_url="https://ci.example.test/unit",
+                    started_at=datetime(2026, 7, 3, 10, 0, tzinfo=UTC),
+                    completed_at=datetime(2026, 7, 3, 10, 3, tzinfo=UTC),
+                )
+            ],
+            commit_statuses=[
+                CommitStatusRecord(
+                    id=201,
+                    context="build",
+                    state="success",
+                    description="Build passed",
+                    target_url="https://ci.example.test/build/2",
+                    creator_login="ci-bot",
+                    created_at=datetime(2026, 7, 3, 10, 20, tzinfo=UTC),
+                    updated_at=datetime(2026, 7, 3, 10, 21, tzinfo=UTC),
+                )
+            ],
+            total_check_runs=1,
+            total_status_contexts=1,
+            passing_count=2,
+            failing_count=0,
+            pending_count=0,
+            neutral_count=0,
+            skipped_count=0,
+            warnings=[],
+            fetched_at=datetime(2026, 7, 3, 10, 30, tzinfo=UTC),
+            completeness=CiCompleteness(
+                check_runs_complete=True,
+                commit_statuses_complete=True,
+                check_run_pages_fetched=1,
+                commit_status_pages_fetched=1,
+                raw_status_record_count=1,
+                unique_status_context_count=1,
+                warnings=[],
+            ),
+            rate_limit=GitHubRateLimit(
+                limit=5000,
+                remaining=4997,
+                used=3,
+                resource="core",
+                reset_at=datetime(2026, 7, 3, 11, 0, tzinfo=UTC),
+            ),
+        ),
         completeness=SnapshotCompleteness(
             files_complete=True,
             commits_complete=True,
@@ -126,8 +186,13 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
 
 
 class FakeGitHubClient:
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        snapshot: PullRequestSnapshot | None = None,
+    ) -> None:
         self.error = error
+        self.snapshot = snapshot
         self.references: list[PullRequestReference] = []
 
     async def get_pull_request_snapshot(
@@ -137,6 +202,8 @@ class FakeGitHubClient:
         self.references.append(reference)
         if self.error:
             raise self.error
+        if self.snapshot:
+            return self.snapshot
         return make_snapshot(reference)
 
 
@@ -169,9 +236,62 @@ def test_snapshot_endpoint_returns_exact_shape_and_normalizes_url() -> None:
     assert data["files"][1]["patch"] is None
     assert data["files"][1]["previous_filename"] == "docs/legacy.md"
     assert [commit["sha"] for commit in data["commits"]] == ["commit-one", "commit-two"]
+    assert data["ci"]["state"] == "passing"
+    assert data["ci"]["visibility"] == "complete"
+    assert data["ci"]["check_runs"][0]["provider_slug"] == "github-actions"
+    assert data["ci"]["commit_statuses"][0]["context"] == "build"
+    assert "risk_score" not in data
+    assert "merge_decision" not in data
     assert data["completeness"]["missing_patch_count"] == 1
     assert data["rate_limit"]["remaining"] == 4998
     assert fake.references[0].canonical_url == "https://github.com/octocat/Hello-World/pull/42"
+
+
+@pytest.mark.parametrize(
+    ("state", "visibility"),
+    [
+        (CiState.FAILING, CiVisibility.COMPLETE),
+        (CiState.PENDING, CiVisibility.COMPLETE),
+        (CiState.MISSING, CiVisibility.COMPLETE),
+        (CiState.UNKNOWN, CiVisibility.UNAVAILABLE),
+        (CiState.FAILING, CiVisibility.PARTIAL),
+    ],
+)
+def test_snapshot_endpoint_serializes_ci_state_and_visibility(
+    state: CiState,
+    visibility: CiVisibility,
+) -> None:
+    base = make_snapshot(
+        PullRequestReference(
+            owner="octocat",
+            repository="Hello-World",
+            pull_number=42,
+            canonical_url="https://github.com/octocat/Hello-World/pull/42",
+        )
+    )
+    snapshot = base.model_copy(
+        update={
+            "ci": base.ci.model_copy(
+                update={
+                    "state": state,
+                    "visibility": visibility,
+                    "warnings": ["CI visibility warning."] if visibility != CiVisibility.COMPLETE else [],
+                }
+            )
+        }
+    )
+
+    response = client_with_fake(FakeGitHubClient(snapshot=snapshot)).post(
+        "/api/v1/pull-requests/snapshot",
+        json={"url": "https://github.com/octocat/Hello-World/pull/42"},
+    )
+
+    assert response.status_code == 200
+    ci = response.json()["data"]["ci"]
+    assert ci["state"] == state
+    assert ci["visibility"] == visibility
+    if visibility != CiVisibility.COMPLETE:
+        assert ci["warnings"]
 
 
 def test_snapshot_endpoint_reuses_invalid_url_contract() -> None:
@@ -263,5 +383,8 @@ def test_openapi_contains_snapshot_endpoint_and_models() -> None:
             "$ref"
         ].endswith("/ApiErrorResponse")
     assert "PullRequestSnapshot" in schemas
+    assert "PullRequestCi" in schemas
+    assert "CiState" in schemas
+    assert "CiVisibility" in schemas
     assert "FetchPullRequestSnapshotRequest" in schemas
     assert "FetchPullRequestSnapshotResponse" in schemas

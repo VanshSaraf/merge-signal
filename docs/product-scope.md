@@ -8,7 +8,7 @@ Pull requests can look easy to merge while still carrying hidden risk: sensitive
 
 The first version will analyze public GitHub pull requests using repository metadata, changed files, CODEOWNERS, branch and review policies, status checks, and explicit evidence available through supported GitHub surfaces. It will produce separate merge risk and evidence confidence outputs so teams can distinguish likely implementation risk from the strength of the supporting evidence.
 
-The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, and GitHub REST retrieval for public pull-request metadata, changed files, and commits. It does not implement CI/check collection, deterministic classification, or pull-request analysis.
+The current implementation includes the project foundation, deterministic public GitHub PR URL parsing, GitHub REST retrieval for public pull-request metadata, changed files, commits, and read-only CI visibility. It does not implement deterministic classification, signal detection, or pull-request analysis.
 
 ## Non-Goals
 
@@ -35,8 +35,9 @@ The current implementation includes the project foundation, deterministic public
 1. Project foundation: monorepo structure, backend and frontend shells, configuration, tests, and documentation.
 2. PR URL parsing: strict public GitHub pull-request URL parsing and canonical pull-request references.
 3. GitHub data ingestion: public pull-request metadata, changed files, and commits.
-4. CI/check collection and deterministic classification.
-5. Signal engine: deterministic rules for changed-file risk, policy gaps, review coverage, and test/check evidence.
-6. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
-7. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
-8. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.
+4. Read-only CI collection: check runs and commit statuses for the current pull-request head SHA.
+5. Deterministic file classification and signal detection.
+6. Signal engine: deterministic rules for changed-file risk, policy gaps, review coverage, and test/check evidence.
+7. Scoring model: separate merge risk and evidence confidence calculations with traceable explanations.
+8. Interfaces: CLI workflow, web UI report exploration, and GitHub App integration.
+9. Operational readiness: persistence, background processing, observability, rate-limit handling, and deployment hardening.

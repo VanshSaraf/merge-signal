@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
@@ -81,6 +82,71 @@ class GitHubRateLimit(StrictDomainModel):
     reset_at: datetime | None = Field(description="Rate-limit reset time when available.")
 
 
+class CiState(StrEnum):
+    PASSING = "passing"
+    FAILING = "failing"
+    PENDING = "pending"
+    MISSING = "missing"
+    UNKNOWN = "unknown"
+
+
+class CiVisibility(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+
+
+class CheckRunRecord(StrictDomainModel):
+    id: int = Field(description="GitHub check-run identifier.")
+    name: str = Field(description="Check-run name.")
+    status: str = Field(description="GitHub check-run status.")
+    conclusion: str | None = Field(description="GitHub check-run conclusion when available.")
+    provider_name: str | None = Field(description="Provider application name when available.")
+    provider_slug: str | None = Field(description="Provider application slug when available.")
+    details_url: str | None = Field(description="External details URL when available.")
+    started_at: datetime | None = Field(description="Check-run start timestamp when available.")
+    completed_at: datetime | None = Field(description="Check-run completion timestamp when available.")
+
+
+class CommitStatusRecord(StrictDomainModel):
+    id: int = Field(description="GitHub commit-status identifier.")
+    context: str = Field(description="Commit-status context.")
+    state: str = Field(description="GitHub commit-status state.")
+    description: str | None = Field(description="Commit-status description when available.")
+    target_url: str | None = Field(description="Target URL when available.")
+    creator_login: str | None = Field(description="Status creator login when available.")
+    created_at: datetime = Field(description="Creation timestamp.")
+    updated_at: datetime = Field(description="Last update timestamp.")
+
+
+class CiCompleteness(StrictDomainModel):
+    check_runs_complete: bool = Field(description="Whether check-run retrieval completed.")
+    commit_statuses_complete: bool = Field(description="Whether commit-status retrieval completed.")
+    check_run_pages_fetched: int = Field(description="Check-run pages fetched.")
+    commit_status_pages_fetched: int = Field(description="Commit-status pages fetched.")
+    raw_status_record_count: int = Field(description="Raw status records observed before context reduction.")
+    unique_status_context_count: int = Field(description="Unique current status contexts.")
+    warnings: list[str] = Field(description="CI completeness warnings.")
+
+
+class PullRequestCi(StrictDomainModel):
+    state: CiState = Field(description="Aggregated observed CI state.")
+    visibility: CiVisibility = Field(description="CI visibility completeness.")
+    check_runs: list[CheckRunRecord] = Field(description="Normalized check runs.")
+    commit_statuses: list[CommitStatusRecord] = Field(description="Current commit statuses by context.")
+    total_check_runs: int = Field(description="Total check runs reported or observed.")
+    total_status_contexts: int = Field(description="Unique current status contexts.")
+    passing_count: int = Field(description="Current passing records.")
+    failing_count: int = Field(description="Current failing records.")
+    pending_count: int = Field(description="Current pending records.")
+    neutral_count: int = Field(description="Current neutral check runs.")
+    skipped_count: int = Field(description="Current skipped check runs.")
+    warnings: list[str] = Field(description="CI warnings.")
+    fetched_at: datetime = Field(description="UTC timestamp when CI data was fetched.")
+    completeness: CiCompleteness = Field(description="CI completeness details.")
+    rate_limit: GitHubRateLimit | None = Field(description="Latest CI rate-limit metadata when available.")
+
+
 class SnapshotCompleteness(StrictDomainModel):
     files_complete: bool = Field(description="Whether changed-file retrieval is complete.")
     commits_complete: bool = Field(description="Whether commit retrieval is complete.")
@@ -93,6 +159,7 @@ class PullRequestSnapshot(StrictDomainModel):
     metadata: PullRequestMetadata = Field(description="Normalized pull-request metadata.")
     files: list[ChangedFile] = Field(description="Changed files in GitHub order.")
     commits: list[PullRequestCommit] = Field(description="Commits in GitHub order.")
+    ci: PullRequestCi = Field(description="Read-only CI visibility for the pull-request head SHA.")
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")
     rate_limit: GitHubRateLimit = Field(description="Latest available GitHub rate-limit metadata.")

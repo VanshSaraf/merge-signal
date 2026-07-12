@@ -81,3 +81,43 @@ class GitHubPullRequestCommit(GitHubTransportModel):
     html_url: str | None = None
     author: GitHubCommitUser | None = None
     commit: GitHubCommitDetails
+
+
+class GitHubCheckRunApp(GitHubTransportModel):
+    name: str | None = None
+    slug: str | None = None
+    html_url: str | None = None
+
+
+class GitHubCheckRun(GitHubTransportModel):
+    id: int
+    name: str
+    status: str
+    conclusion: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    details_url: str | None = None
+    html_url: str | None = None
+    external_id: str | None = None
+    app: GitHubCheckRunApp | None = None
+
+
+class GitHubCheckRunsResponse(GitHubTransportModel):
+    total_count: int
+    check_runs: list[GitHubCheckRun] = Field(default_factory=list)
+
+
+class GitHubStatusCreator(GitHubTransportModel):
+    login: str | None = None
+    avatar_url: str | None = None
+
+
+class GitHubCommitStatus(GitHubTransportModel):
+    id: int
+    state: str
+    context: str
+    description: str | None = None
+    target_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    creator: GitHubStatusCreator | None = None

@@ -2,7 +2,7 @@
 
 ## Current Capabilities
 
-MergeSignal can fetch public GitHub pull-request metadata, changed files, and commits from the GitHub REST API after a PR URL passes the strict local parser.
+MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser.
 
 Supported input:
 
@@ -10,7 +10,7 @@ Supported input:
 https://github.com/{owner}/{repository}/pull/{pull_number}
 ```
 
-GitHub Enterprise, private repositories, CI/check runs, commit statuses, CODEOWNERS, policies, and risk analysis are not implemented in this milestone.
+GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, and risk analysis are not implemented in this milestone.
 
 ## Authentication
 
@@ -36,10 +36,12 @@ The GitHub client sends:
 - `GET /repos/{owner}/{repo}/pulls/{pull_number}`
 - `GET /repos/{owner}/{repo}/pulls/{pull_number}/files`
 - `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`
+- `GET /repos/{owner}/{repo}/commits/{head_sha}/check-runs`
+- `GET /repos/{owner}/{repo}/statuses/{head_sha}`
 
 ## Pagination
 
-Changed files and commits are fetched with `per_page=GITHUB_PER_PAGE`, starting at page 1. The client follows only safe `rel="next"` links that remain on the configured GitHub API host, rejects repeated next URLs, and enforces `GITHUB_MAX_PAGES`.
+Changed files, commits, check runs, and commit statuses are fetched with `per_page=GITHUB_PER_PAGE`, starting at page 1. The client follows only safe `rel="next"` links that remain on the configured GitHub API host, rejects repeated next URLs, and enforces `GITHUB_MAX_PAGES`.
 
 Ordering from GitHub is preserved.
 
@@ -83,9 +85,11 @@ The snapshot reports completeness without claiming analysis. Missing file patche
 
 Warnings are also added when GitHub reports a changed-file or commit count that differs from the retrieved lists.
 
+CI completeness is reported separately. Check-run `total_count` is compared with retrieved check runs, commit statuses are reduced to current unique contexts, and partial access or temporary CI-only failures are represented with warnings.
+
 ## Security
 
-The client does not clone repositories, execute repository code, install dependencies, follow pagination to unrelated hosts, expose authorization headers, or return raw GitHub payloads.
+The client does not clone repositories, execute repository code, install dependencies, follow pagination to unrelated hosts, expose authorization headers, return raw GitHub payloads, publish check runs, update commit statuses, fetch workflow logs, fetch artifacts, or infer branch-protection required checks.
 
 ## Testing
 

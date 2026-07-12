@@ -1,0 +1,45 @@
+{
+  "total_count": 6,
+  "check_runs": [
+    {
+      "id": 104,
+      "name": "integration",
+      "status": "in_progress",
+      "conclusion": null,
+      "started_at": "2026-07-03T10:07:00Z",
+      "completed_at": null,
+      "details_url": "https://ci.example.test/integration",
+      "html_url": null,
+      "external_id": null,
+      "app": {
+        "name": "External CI",
+        "slug": "external-ci",
+        "html_url": "https://ci.example.test"
+      }
+    },
+    {
+      "id": 105,
+      "name": "security",
+      "status": "completed",
+      "conclusion": "timed_out",
+      "started_at": "2026-07-03T10:08:00Z",
+      "completed_at": "2026-07-03T10:30:00Z",
+      "details_url": "https://ci.example.test/security",
+      "html_url": null,
+      "external_id": null,
+      "app": null
+    },
+    {
+      "id": 106,
+      "name": "unknown future check",
+      "status": "completed",
+      "conclusion": "future_conclusion",
+      "started_at": "2026-07-03T10:31:00Z",
+      "completed_at": "2026-07-03T10:32:00Z",
+      "details_url": null,
+      "html_url": null,
+      "external_id": null,
+      "app": null
+    }
+  ]
+}

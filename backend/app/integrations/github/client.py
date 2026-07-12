@@ -2,18 +2,21 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings
 from app.domain.pull_request import (
+    CheckRunRecord,
     ChangedFile,
+    CommitStatusRecord,
     GitHubRateLimit,
     PullRequestAuthor,
     PullRequestBranch,
     PullRequestCommit,
+    PullRequestCi,
     PullRequestMetadata,
     PullRequestReference,
     PullRequestSnapshot,
@@ -30,11 +33,15 @@ from app.errors import (
     GitHubUnavailableError,
 )
 from app.integrations.github.models import (
+    GitHubCheckRun,
+    GitHubCheckRunsResponse,
+    GitHubCommitStatus,
     GitHubPullRequest,
     GitHubPullRequestCommit,
     GitHubPullRequestFile,
 )
 from app.integrations.github.pagination import parse_next_link
+from app.services.ci_state import aggregate_ci_state
 
 SleepCallable = Callable[[float], Awaitable[None]]
 
@@ -76,13 +83,13 @@ class GitHubRestClient:
             await self._client.aclose()
 
     async def get_pull_request(self, reference: PullRequestReference) -> PullRequestMetadata:
-        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}"
+        path = self._repo_path(reference, "pulls", str(reference.pull_number))
         payload = await self._request_json("GET", path)
         upstream = self._validate_payload(payload, GitHubPullRequest)
         return self._normalize_pull_request(upstream)
 
     async def list_pull_request_files(self, reference: PullRequestReference) -> list[ChangedFile]:
-        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}/files"
+        path = self._repo_path(reference, "pulls", str(reference.pull_number), "files")
         items = await self._request_paginated(path)
         return [
             self._normalize_file(self._validate_payload(item, GitHubPullRequestFile))
@@ -93,12 +100,101 @@ class GitHubRestClient:
         self,
         reference: PullRequestReference,
     ) -> list[PullRequestCommit]:
-        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}/commits"
+        path = self._repo_path(reference, "pulls", str(reference.pull_number), "commits")
         items = await self._request_paginated(path)
         return [
             self._normalize_commit(self._validate_payload(item, GitHubPullRequestCommit))
             for item in items
         ]
+
+    async def list_check_runs(
+        self,
+        reference: PullRequestReference,
+        head_sha: str,
+    ) -> tuple[list[CheckRunRecord], int, int]:
+        path = self._repo_path(reference, "commits", head_sha, "check-runs")
+        items, total_count, pages_fetched = await self._request_paginated_collection(
+            path,
+            "check_runs",
+            total_count_key="total_count",
+        )
+        return (
+            [
+                self._normalize_check_run(self._validate_payload(item, GitHubCheckRun))
+                for item in items
+            ],
+            total_count if total_count is not None else len(items),
+            pages_fetched,
+        )
+
+    async def list_commit_statuses(
+        self,
+        reference: PullRequestReference,
+        head_sha: str,
+    ) -> tuple[list[CommitStatusRecord], int]:
+        path = self._repo_path(reference, "statuses", head_sha)
+        items, pages_fetched = await self._request_paginated_with_pages(path)
+        return (
+            [
+                self._normalize_commit_status(self._validate_payload(item, GitHubCommitStatus))
+                for item in items
+            ],
+            pages_fetched,
+        )
+
+    async def get_pull_request_ci(
+        self,
+        reference: PullRequestReference,
+        head_sha: str,
+    ) -> PullRequestCi:
+        warnings: list[str] = []
+        check_runs: list[CheckRunRecord] = []
+        statuses: list[CommitStatusRecord] = []
+        total_check_runs: int | None = None
+        check_run_pages_fetched = 0
+        status_pages_fetched = 0
+        check_runs_complete = True
+        statuses_complete = True
+
+        try:
+            check_runs, total_check_runs, check_run_pages_fetched = await self.list_check_runs(
+                reference,
+                head_sha,
+            )
+            if total_check_runs != len(check_runs):
+                check_runs_complete = False
+                warnings.append("GitHub reported more check runs than were retrieved.")
+        except (
+            GitHubAccessDeniedError,
+            GitHubUnavailableError,
+            GitHubInvalidResponseError,
+            GitHubPaginationLimitExceededError,
+        ):
+            check_runs_complete = False
+            warnings.append("Check runs could not be retrieved from GitHub.")
+
+        try:
+            statuses, status_pages_fetched = await self.list_commit_statuses(reference, head_sha)
+        except (
+            GitHubAccessDeniedError,
+            GitHubUnavailableError,
+            GitHubInvalidResponseError,
+            GitHubPaginationLimitExceededError,
+        ):
+            statuses_complete = False
+            warnings.append("Commit statuses could not be retrieved from GitHub.")
+
+        return aggregate_ci_state(
+            check_runs,
+            statuses,
+            check_runs_complete=check_runs_complete,
+            commit_statuses_complete=statuses_complete,
+            check_run_pages_fetched=check_run_pages_fetched,
+            commit_status_pages_fetched=status_pages_fetched,
+            total_check_runs=total_check_runs,
+            warnings=warnings,
+            rate_limit=self._latest_rate_limit,
+        )
 
     async def get_pull_request_snapshot(
         self,
@@ -107,6 +203,7 @@ class GitHubRestClient:
         metadata = await self.get_pull_request(reference)
         files = await self.list_pull_request_files(reference)
         commits = await self.list_pull_request_commits(reference)
+        ci = await self.get_pull_request_ci(reference, metadata.head_sha)
         completeness = self._build_completeness(metadata, files, commits)
 
         return PullRequestSnapshot(
@@ -114,6 +211,7 @@ class GitHubRestClient:
             metadata=metadata,
             files=files,
             commits=commits,
+            ci=ci,
             completeness=completeness,
             fetched_at=datetime.now(UTC),
             rate_limit=self._latest_rate_limit,
@@ -130,11 +228,25 @@ class GitHubRestClient:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
+    def _repo_path(self, reference: PullRequestReference, *segments: str) -> str:
+        encoded = [
+            "repos",
+            quote(reference.owner, safe=""),
+            quote(reference.repository, safe=""),
+            *(quote(segment, safe="") for segment in segments),
+        ]
+        return "/" + "/".join(encoded)
+
     async def _request_paginated(self, path: str) -> list[dict[str, Any]]:
+        items, _pages_fetched = await self._request_paginated_with_pages(path)
+        return items
+
+    async def _request_paginated_with_pages(self, path: str) -> tuple[list[dict[str, Any]], int]:
         items: list[dict[str, Any]] = []
         next_url: str | None = path
         seen_urls: set[str] = set()
         page = 1
+        pages_fetched = 0
 
         while next_url:
             if page > self._settings.github_max_pages or next_url in seen_urls:
@@ -152,13 +264,57 @@ class GitHubRestClient:
             if not isinstance(payload, list):
                 raise GitHubInvalidResponseError()
 
+            pages_fetched += 1
             items.extend(payload)
             next_url = parse_next_link(response.headers.get("Link"), self._base_url)
             if next_url is None and len(payload) < self._settings.github_per_page:
                 break
             page += 1
 
-        return items
+        return items, pages_fetched
+
+    async def _request_paginated_collection(
+        self,
+        path: str,
+        item_key: str,
+        total_count_key: str,
+    ) -> tuple[list[dict[str, Any]], int | None, int]:
+        items: list[dict[str, Any]] = []
+        total_count: int | None = None
+        next_url: str | None = path
+        seen_urls: set[str] = set()
+        page = 1
+        pages_fetched = 0
+
+        while next_url:
+            if page > self._settings.github_max_pages or next_url in seen_urls:
+                raise GitHubPaginationLimitExceededError()
+            seen_urls.add(next_url)
+
+            response = await self._request(
+                "GET",
+                next_url,
+                params={"per_page": self._settings.github_per_page, "page": page}
+                if next_url == path
+                else None,
+            )
+            payload = self._parse_json(response)
+            if not isinstance(payload, dict) or not isinstance(payload.get(item_key), list):
+                raise GitHubInvalidResponseError()
+            if total_count_key in payload:
+                if not isinstance(payload[total_count_key], int):
+                    raise GitHubInvalidResponseError()
+                total_count = payload[total_count_key]
+
+            page_items = payload[item_key]
+            pages_fetched += 1
+            items.extend(page_items)
+            next_url = parse_next_link(response.headers.get("Link"), self._base_url)
+            if next_url is None and len(page_items) < self._settings.github_per_page:
+                break
+            page += 1
+
+        return items, total_count, pages_fetched
 
     async def _request_json(
         self,
@@ -298,6 +454,31 @@ class GitHubRestClient:
             author_name=upstream.commit.author.name if upstream.commit.author else None,
             authored_at=upstream.commit.author.date if upstream.commit.author else None,
             committed_at=upstream.commit.committer.date if upstream.commit.committer else None,
+        )
+
+    def _normalize_check_run(self, upstream: GitHubCheckRun) -> CheckRunRecord:
+        return CheckRunRecord(
+            id=upstream.id,
+            name=upstream.name,
+            status=upstream.status,
+            conclusion=upstream.conclusion,
+            provider_name=upstream.app.name if upstream.app else None,
+            provider_slug=upstream.app.slug if upstream.app else None,
+            details_url=upstream.details_url,
+            started_at=upstream.started_at,
+            completed_at=upstream.completed_at,
+        )
+
+    def _normalize_commit_status(self, upstream: GitHubCommitStatus) -> CommitStatusRecord:
+        return CommitStatusRecord(
+            id=upstream.id,
+            context=upstream.context,
+            state=upstream.state,
+            description=upstream.description,
+            target_url=upstream.target_url,
+            creator_login=upstream.creator.login if upstream.creator else None,
+            created_at=upstream.created_at,
+            updated_at=upstream.updated_at,
         )
 
     def _build_completeness(

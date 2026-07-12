@@ -1,0 +1,25 @@
+[
+  {
+    "id": 203,
+    "state": "error",
+    "context": "security",
+    "description": "Scanner errored",
+    "target_url": "https://ci.example.test/security",
+    "created_at": "2026-07-03T10:24:00Z",
+    "updated_at": "2026-07-03T10:25:00Z",
+    "creator": {
+      "login": "security-bot",
+      "avatar_url": null
+    }
+  },
+  {
+    "id": 204,
+    "state": "future_state",
+    "context": "future",
+    "description": "Unknown status value",
+    "target_url": null,
+    "created_at": "2026-07-03T10:26:00Z",
+    "updated_at": "2026-07-03T10:27:00Z",
+    "creator": null
+  }
+]

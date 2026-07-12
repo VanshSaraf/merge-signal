@@ -1,13 +1,13 @@
 # MergeSignal
 
-MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, and a versioned API endpoint for strict public GitHub PR URL parsing.
+MergeSignal is a deterministic GitHub pull-request risk analysis and merge-readiness platform. The current implementation includes a FastAPI backend, a React/Vite frontend, health checks, strict public GitHub PR URL parsing, and GitHub REST data retrieval for public pull-request metadata, changed files, and commits.
 
 The pull-request analysis engine is intentionally not implemented yet.
 
 ## Repository Layout
 
 ```text
-backend/    FastAPI application, domain models, parser service, settings, and tests
+backend/    FastAPI application, domain models, GitHub integration, settings, and tests
 frontend/   React application, API client layer, and tests
 docs/       Product scope, architecture, and API notes
 ```
@@ -45,6 +45,22 @@ curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/parse \
   -d '{"url":"https://github.com/octocat/Hello-World/pull/1347?tab=files#discussion"}'
 ```
 
+Fetch a public GitHub PR snapshot:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/snapshot \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://github.com/octocat/Hello-World/pull/1347"}'
+```
+
+Optional GitHub token authentication can be configured in `backend/.env`:
+
+```bash
+GITHUB_TOKEN=
+```
+
+Leave `GITHUB_TOKEN` empty for unauthenticated public requests. Do not commit real token values.
+
 Run backend tests:
 
 ```bash
@@ -79,6 +95,7 @@ npm audit --audit-level=moderate
 - [Product scope](docs/product-scope.md)
 - [Architecture](docs/architecture.md)
 - [API](docs/api.md)
+- [GitHub integration](docs/github-integration.md)
 
 ## Environment Configuration
 
@@ -87,6 +104,14 @@ Backend:
 - `MERGE_SIGNAL_ENVIRONMENT`
 - `MERGE_SIGNAL_PROJECT_NAME`
 - `MERGE_SIGNAL_CORS_ORIGINS`
+- `GITHUB_API_BASE_URL`
+- `GITHUB_TOKEN`
+- `GITHUB_REQUEST_TIMEOUT_SECONDS`
+- `GITHUB_MAX_RETRIES`
+- `GITHUB_RETRY_BASE_DELAY_SECONDS`
+- `GITHUB_PER_PAGE`
+- `GITHUB_MAX_PAGES`
+- `GITHUB_USER_AGENT`
 
 Frontend:
 
@@ -96,6 +121,6 @@ See `backend/.env.example` and `frontend/.env.example` for local defaults.
 
 ## Current Status
 
-Implemented capabilities are limited to project foundation, health reporting, and deterministic parsing of supported public GitHub PR URLs into normalized pull-request references. The next planned milestone is live public GitHub metadata retrieval, kept separate from URL parsing.
+Implemented capabilities are limited to project foundation, health reporting, deterministic parsing of supported public GitHub PR URLs, and retrieval of public GitHub pull-request metadata, changed files, and commits. The next planned milestone is deterministic classification of retrieved data and CI/check collection.
 
-This foundation does not include pull-request analysis, merge risk scoring, evidence confidence scoring, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or GitHub API fetching.
+This foundation does not include CI/check-run fetching, pull-request analysis, merge risk scoring, evidence confidence scoring, PostgreSQL, Redis, Docker Compose, GitHub OAuth, GitHub App installation flows, webhooks, background workers, CLI integration, or automated PR comments.

@@ -1,0 +1,49 @@
+{
+  "number": 42,
+  "title": "Improve merge signal collection",
+  "body": null,
+  "state": "open",
+  "draft": false,
+  "html_url": "https://github.com/octocat/Hello-World/pull/42",
+  "user": {
+    "login": "octocat",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+    "html_url": "https://github.com/octocat",
+    "ignored": "value"
+  },
+  "base": {
+    "ref": "main",
+    "sha": "base-sha",
+    "repo": {
+      "full_name": "octocat/Hello-World"
+    }
+  },
+  "head": {
+    "ref": "feature/signal",
+    "sha": "head-sha",
+    "repo": {
+      "full_name": "octocat/Hello-World"
+    }
+  },
+  "created_at": "2026-07-01T10:00:00Z",
+  "updated_at": "2026-07-02T10:00:00Z",
+  "closed_at": null,
+  "merged_at": null,
+  "additions": 12,
+  "deletions": 4,
+  "changed_files": 3,
+  "commits": 3,
+  "mergeable": null,
+  "mergeable_state": null,
+  "labels": [
+    {
+      "name": "backend"
+    },
+    {
+      "name": "safe-fixture"
+    }
+  ],
+  "ignored": {
+    "nested": true
+  }
+}

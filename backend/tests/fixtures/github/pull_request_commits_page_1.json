@@ -1,0 +1,36 @@
+[
+  {
+    "sha": "commit-one",
+    "html_url": "https://github.com/octocat/Hello-World/commit/commit-one",
+    "author": {
+      "login": "octocat"
+    },
+    "commit": {
+      "message": "Add metadata client",
+      "author": {
+        "name": "Octo Cat",
+        "date": "2026-07-01T11:00:00Z"
+      },
+      "committer": {
+        "name": "Octo Cat",
+        "date": "2026-07-01T11:05:00Z"
+      }
+    }
+  },
+  {
+    "sha": "commit-two",
+    "html_url": null,
+    "author": null,
+    "commit": {
+      "message": "Handle files",
+      "author": {
+        "name": "Safe Fixture",
+        "date": "2026-07-01T12:00:00Z"
+      },
+      "committer": {
+        "name": "Safe Fixture",
+        "date": "2026-07-01T12:05:00Z"
+      }
+    }
+  }
+]

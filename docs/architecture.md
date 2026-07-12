@@ -14,11 +14,12 @@ The backend is a FastAPI application under `backend/app`.
 - `app/api/v1/` owns versioned API routes.
 - `app/domain/` contains domain models that do not depend on FastAPI route code.
 - `app/services/` contains application services such as PR URL parsing.
+- `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
 - `tests/` contains pytest coverage for API behavior.
 
-The backend currently exposes `GET /health` and `POST /api/v1/pull-requests/parse`. Future PR-analysis modules should live behind dedicated service and API boundaries rather than inside route handlers.
+The backend currently exposes `GET /health`, `POST /api/v1/pull-requests/parse`, and `POST /api/v1/pull-requests/snapshot`. Future PR-analysis modules should live behind dedicated service and API boundaries rather than inside route handlers.
 
 ## Request Sequence
 
@@ -27,18 +28,30 @@ HTTP request
 -> FastAPI versioned route
 -> PR URL parser service
 -> PullRequestReference domain model
+-> GitHub REST client when snapshot data is requested
+-> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. It intentionally does not include GitHub API metadata such as title, author, commits, files, checks, or reviews.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, commits, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include CI checks, risk scores, confidence scores, decisions, signals, or recommendations.
 
 ## Parser Service
 
 The parser accepts only supported public GitHub PR URLs and performs deterministic normalization. It validates scheme, host, authentication components, ports, path structure, decoded path segments, and pull number format separately. Query strings and fragments are ignored only after the base route is valid.
 
 Parsing and GitHub fetching are separated because URL shape validation is a local trust-boundary concern, while future metadata retrieval will involve network access, rate limits, authentication policy, and response handling.
+
+## GitHub Integration Boundary
+
+GitHub-specific transport models live under `app/integrations/github/models.py` and ignore unknown upstream fields. Internal domain models remain strict and explicit. The route layer never returns raw GitHub dictionaries.
+
+`GitHubRestClient` owns one HTTPX `AsyncClient` for a complete snapshot request. FastAPI provides it through dependency injection, which lets tests replace the client without patching transport internals. The client closes owned HTTPX clients after the request lifecycle.
+
+Pagination is centralized in `app/integrations/github/pagination.py`. Only safe `rel="next"` links on the configured API host are followed, repeated links are rejected, and `GITHUB_MAX_PAGES` bounds the flow.
+
+Retries are limited to HTTPX transport errors, timeouts, and transient `502`/`503`/`504` responses. Authentication, authorization, not-found, rate-limit, and schema errors are not retried.
 
 ## API Models And Errors
 
@@ -59,11 +72,13 @@ FastAPI/Pydantic request-validation errors remain distinguishable because they u
 
 Routes may depend on API models, services, and application errors. Services may depend on domain models and application errors. Domain models do not depend on routes, services, or FastAPI.
 
+GitHub integration code may depend on settings, transport models, domain models, and application errors. Routes depend on the GitHub client through FastAPI dependency injection rather than HTTPX directly.
+
 ## Trust Boundary
 
 The parse endpoint treats the incoming URL as untrusted input. It does not trim, repair, fetch, clone, execute, or install anything from the referenced repository.
 
-Future GitHub client code should belong in a dedicated integration/service module separate from the parser and domain model.
+The snapshot endpoint may fetch public data from the configured GitHub REST API host after parsing succeeds. It does not clone repositories, execute repository code, install dependencies, or follow pagination links to unrelated hosts.
 
 ## Frontend
 
@@ -84,7 +99,8 @@ Backend configuration is loaded with Pydantic settings using the `MERGE_SIGNAL_`
 
 Planned backend areas:
 
-- GitHub data collection for public pull-request metadata.
+- CI/check collection.
+- Deterministic file classification.
 - Repository policy parsing.
 - CODEOWNERS evaluation.
 - Risk signal calculation.

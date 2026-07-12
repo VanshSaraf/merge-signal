@@ -1,0 +1,21 @@
+[
+  {
+    "filename": "backend/app/main.py",
+    "status": "modified",
+    "additions": 5,
+    "deletions": 1,
+    "changes": 6,
+    "patch": "@@ -1 +1 @@",
+    "blob_url": "https://github.com/octocat/Hello-World/blob/head/backend/app/main.py"
+  },
+  {
+    "filename": "docs/old.md",
+    "previous_filename": "docs/legacy.md",
+    "status": "renamed",
+    "additions": 1,
+    "deletions": 1,
+    "changes": 2,
+    "patch": null,
+    "blob_url": "https://github.com/octocat/Hello-World/blob/head/docs/old.md"
+  }
+]

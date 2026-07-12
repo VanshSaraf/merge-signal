@@ -1,0 +1,355 @@
+import asyncio
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse
+
+import httpx
+from pydantic import TypeAdapter, ValidationError
+
+from app.core.config import Settings
+from app.domain.pull_request import (
+    ChangedFile,
+    GitHubRateLimit,
+    PullRequestAuthor,
+    PullRequestBranch,
+    PullRequestCommit,
+    PullRequestMetadata,
+    PullRequestReference,
+    PullRequestSnapshot,
+    SnapshotCompleteness,
+)
+from app.errors import (
+    GitHubAccessDeniedError,
+    GitHubAuthenticationFailedError,
+    GitHubInvalidResponseError,
+    GitHubPaginationLimitExceededError,
+    GitHubPullRequestNotFoundError,
+    GitHubRateLimitedError,
+    GitHubRequestFailedError,
+    GitHubUnavailableError,
+)
+from app.integrations.github.models import (
+    GitHubPullRequest,
+    GitHubPullRequestCommit,
+    GitHubPullRequestFile,
+)
+from app.integrations.github.pagination import parse_next_link
+
+SleepCallable = Callable[[float], Awaitable[None]]
+
+
+class GitHubRestClient:
+    """Asynchronous data-access client for public GitHub pull-request data."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        http_client: httpx.AsyncClient | None = None,
+        sleep: SleepCallable = asyncio.sleep,
+    ) -> None:
+        self._settings = settings
+        self._owns_client = http_client is None
+        self._sleep = sleep
+        self._base_url = settings.github_api_base_url_string
+        self._latest_rate_limit = GitHubRateLimit(
+            limit=None,
+            remaining=None,
+            used=None,
+            resource=None,
+            reset_at=None,
+        )
+        self._client = http_client or httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=settings.github_request_timeout_seconds,
+            headers=self._headers(),
+        )
+
+    async def __aenter__(self) -> "GitHubRestClient":
+        return self
+
+    async def __aexit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
+
+    async def get_pull_request(self, reference: PullRequestReference) -> PullRequestMetadata:
+        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}"
+        payload = await self._request_json("GET", path)
+        upstream = self._validate_payload(payload, GitHubPullRequest)
+        return self._normalize_pull_request(upstream)
+
+    async def list_pull_request_files(self, reference: PullRequestReference) -> list[ChangedFile]:
+        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}/files"
+        items = await self._request_paginated(path)
+        return [
+            self._normalize_file(self._validate_payload(item, GitHubPullRequestFile))
+            for item in items
+        ]
+
+    async def list_pull_request_commits(
+        self,
+        reference: PullRequestReference,
+    ) -> list[PullRequestCommit]:
+        path = f"/repos/{reference.owner}/{reference.repository}/pulls/{reference.pull_number}/commits"
+        items = await self._request_paginated(path)
+        return [
+            self._normalize_commit(self._validate_payload(item, GitHubPullRequestCommit))
+            for item in items
+        ]
+
+    async def get_pull_request_snapshot(
+        self,
+        reference: PullRequestReference,
+    ) -> PullRequestSnapshot:
+        metadata = await self.get_pull_request(reference)
+        files = await self.list_pull_request_files(reference)
+        commits = await self.list_pull_request_commits(reference)
+        completeness = self._build_completeness(metadata, files, commits)
+
+        return PullRequestSnapshot(
+            reference=reference,
+            metadata=metadata,
+            files=files,
+            commits=commits,
+            completeness=completeness,
+            fetched_at=datetime.now(UTC),
+            rate_limit=self._latest_rate_limit,
+        )
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": self._settings.github_user_agent,
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        token = self._settings.github_token_value
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+
+    async def _request_paginated(self, path: str) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        next_url: str | None = path
+        seen_urls: set[str] = set()
+        page = 1
+
+        while next_url:
+            if page > self._settings.github_max_pages or next_url in seen_urls:
+                raise GitHubPaginationLimitExceededError()
+            seen_urls.add(next_url)
+
+            response = await self._request(
+                "GET",
+                next_url,
+                params={"per_page": self._settings.github_per_page, "page": page}
+                if next_url == path
+                else None,
+            )
+            payload = self._parse_json(response)
+            if not isinstance(payload, list):
+                raise GitHubInvalidResponseError()
+
+            items.extend(payload)
+            next_url = parse_next_link(response.headers.get("Link"), self._base_url)
+            if next_url is None and len(payload) < self._settings.github_per_page:
+                break
+            page += 1
+
+        return items
+
+    async def _request_json(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request(method, url, params=params)
+        payload = self._parse_json(response)
+        if not isinstance(payload, dict):
+            raise GitHubInvalidResponseError()
+        return payload
+
+    async def _request(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        attempts = self._settings.github_max_retries + 1
+        last_error: Exception | None = None
+
+        for attempt in range(attempts):
+            try:
+                response = await self._client.request(method, url, params=params)
+                self._latest_rate_limit = extract_rate_limit(response.headers)
+                if response.status_code in {502, 503, 504}:
+                    if attempt < attempts - 1:
+                        await self._sleep(self._settings.github_retry_base_delay_seconds * (2**attempt))
+                        continue
+                    raise GitHubUnavailableError()
+                if response.status_code >= 400:
+                    self._raise_for_status(response)
+                return response
+            except (httpx.TimeoutException, httpx.TransportError) as error:
+                last_error = error
+                if attempt < attempts - 1:
+                    await self._sleep(self._settings.github_retry_base_delay_seconds * (2**attempt))
+                    continue
+                raise GitHubUnavailableError() from error
+
+        raise GitHubUnavailableError() from last_error
+
+    def _raise_for_status(self, response: httpx.Response) -> None:
+        if response.status_code == 401:
+            raise GitHubAuthenticationFailedError()
+        if response.status_code == 404:
+            raise GitHubPullRequestNotFoundError()
+        if response.status_code == 429 or self._is_rate_limited(response):
+            metadata = {}
+            if self._latest_rate_limit.reset_at is not None:
+                metadata["reset_at"] = self._latest_rate_limit.reset_at.isoformat()
+            raise GitHubRateLimitedError(metadata=metadata)
+        if response.status_code == 403:
+            raise GitHubAccessDeniedError()
+        if response.status_code >= 500:
+            raise GitHubRequestFailedError()
+        raise GitHubRequestFailedError()
+
+    def _is_rate_limited(self, response: httpx.Response) -> bool:
+        if response.headers.get("X-RateLimit-Remaining") == "0":
+            return True
+        try:
+            payload = response.json()
+        except ValueError:
+            return False
+        message = str(payload.get("message", "")).lower() if isinstance(payload, dict) else ""
+        return "rate limit" in message
+
+    def _parse_json(self, response: httpx.Response) -> Any:
+        try:
+            return response.json()
+        except ValueError as error:
+            raise GitHubInvalidResponseError() from error
+
+    def _validate_payload(self, payload: Any, model_type: type) -> Any:
+        try:
+            return TypeAdapter(model_type).validate_python(payload)
+        except ValidationError as error:
+            raise GitHubInvalidResponseError() from error
+
+    def _normalize_pull_request(self, upstream: GitHubPullRequest) -> PullRequestMetadata:
+        return PullRequestMetadata(
+            number=upstream.number,
+            title=upstream.title,
+            body=upstream.body,
+            state=upstream.state,
+            draft=upstream.draft,
+            html_url=upstream.html_url,
+            author=PullRequestAuthor(
+                login=upstream.user.login,
+                avatar_url=upstream.user.avatar_url,
+                html_url=upstream.user.html_url,
+            ),
+            base_branch=PullRequestBranch(
+                ref=upstream.base.ref,
+                sha=upstream.base.sha,
+                repository_full_name=upstream.base.repo.full_name,
+            ),
+            head_branch=PullRequestBranch(
+                ref=upstream.head.ref,
+                sha=upstream.head.sha,
+                repository_full_name=upstream.head.repo.full_name,
+            ),
+            head_sha=upstream.head.sha,
+            created_at=upstream.created_at,
+            updated_at=upstream.updated_at,
+            closed_at=upstream.closed_at,
+            merged_at=upstream.merged_at,
+            additions=upstream.additions,
+            deletions=upstream.deletions,
+            changed_files=upstream.changed_files,
+            commit_count=upstream.commits,
+            mergeable=upstream.mergeable,
+            mergeable_state=upstream.mergeable_state,
+            labels=[label.name for label in upstream.labels],
+        )
+
+    def _normalize_file(self, upstream: GitHubPullRequestFile) -> ChangedFile:
+        return ChangedFile(
+            filename=upstream.filename,
+            status=upstream.status,
+            additions=upstream.additions,
+            deletions=upstream.deletions,
+            changes=upstream.changes,
+            patch=upstream.patch,
+            previous_filename=upstream.previous_filename,
+            blob_url=upstream.blob_url,
+        )
+
+    def _normalize_commit(self, upstream: GitHubPullRequestCommit) -> PullRequestCommit:
+        return PullRequestCommit(
+            sha=upstream.sha,
+            message=upstream.commit.message,
+            html_url=upstream.html_url,
+            author_login=upstream.author.login if upstream.author else None,
+            author_name=upstream.commit.author.name if upstream.commit.author else None,
+            authored_at=upstream.commit.author.date if upstream.commit.author else None,
+            committed_at=upstream.commit.committer.date if upstream.commit.committer else None,
+        )
+
+    def _build_completeness(
+        self,
+        metadata: PullRequestMetadata,
+        files: list[ChangedFile],
+        commits: list[PullRequestCommit],
+    ) -> SnapshotCompleteness:
+        warnings: list[str] = []
+        missing_patch_count = sum(1 for file in files if file.patch is None)
+        if missing_patch_count:
+            warnings.append("One or more changed files do not include patch data from GitHub.")
+
+        files_complete = len(files) == metadata.changed_files
+        commits_complete = len(commits) == metadata.commit_count
+        if not files_complete:
+            warnings.append("GitHub reported more changed files than were retrieved.")
+        if not commits_complete:
+            warnings.append("GitHub reported a different commit count than was retrieved.")
+
+        return SnapshotCompleteness(
+            files_complete=files_complete,
+            commits_complete=commits_complete,
+            missing_patch_count=missing_patch_count,
+            warnings=warnings,
+        )
+
+
+def extract_rate_limit(headers: httpx.Headers) -> GitHubRateLimit:
+    return GitHubRateLimit(
+        limit=_parse_optional_int(headers.get("X-RateLimit-Limit")),
+        remaining=_parse_optional_int(headers.get("X-RateLimit-Remaining")),
+        used=_parse_optional_int(headers.get("X-RateLimit-Used")),
+        resource=headers.get("X-RateLimit-Resource"),
+        reset_at=_parse_reset_at(headers.get("X-RateLimit-Reset")),
+    )
+
+
+def _parse_optional_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _parse_reset_at(value: str | None) -> datetime | None:
+    parsed = _parse_optional_int(value)
+    if parsed is None:
+        return None
+    try:
+        return datetime.fromtimestamp(parsed, UTC)
+    except (OverflowError, OSError, ValueError):
+        return None

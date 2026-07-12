@@ -75,6 +75,115 @@ The request body must be a JSON object with a single string field named `url`. U
 
 Unsupported or malformed PR URLs also return `422`, but use the stable MergeSignal error contract with `error.code` set to `INVALID_PULL_REQUEST_URL`.
 
+## POST /api/v1/pull-requests/snapshot
+
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, and commits from the GitHub REST API, and returns a normalized snapshot. This endpoint does not perform risk analysis, CI/check-run fetching, scoring, recommendations, or merge-readiness decisions.
+
+Request:
+
+```json
+{
+  "url": "https://github.com/owner/repository/pull/123"
+}
+```
+
+Compact success response:
+
+```json
+{
+  "data": {
+    "reference": {
+      "owner": "owner",
+      "repository": "repository",
+      "pull_number": 123,
+      "canonical_url": "https://github.com/owner/repository/pull/123"
+    },
+    "metadata": {
+      "number": 123,
+      "title": "Pull request title",
+      "body": null,
+      "state": "open",
+      "draft": false,
+      "html_url": "https://github.com/owner/repository/pull/123",
+      "author": {
+        "login": "owner",
+        "avatar_url": null,
+        "html_url": "https://github.com/owner"
+      },
+      "base_branch": {
+        "ref": "main",
+        "sha": "base-sha",
+        "repository_full_name": "owner/repository"
+      },
+      "head_branch": {
+        "ref": "feature",
+        "sha": "head-sha",
+        "repository_full_name": "owner/repository"
+      },
+      "head_sha": "head-sha",
+      "created_at": "2026-07-01T10:00:00Z",
+      "updated_at": "2026-07-02T10:00:00Z",
+      "closed_at": null,
+      "merged_at": null,
+      "additions": 12,
+      "deletions": 4,
+      "changed_files": 2,
+      "commit_count": 2,
+      "mergeable": null,
+      "mergeable_state": null,
+      "labels": ["backend"]
+    },
+    "files": [],
+    "commits": [],
+    "completeness": {
+      "files_complete": true,
+      "commits_complete": true,
+      "missing_patch_count": 0,
+      "warnings": []
+    },
+    "fetched_at": "2026-07-03T10:00:00Z",
+    "rate_limit": {
+      "limit": 5000,
+      "remaining": 4998,
+      "used": 2,
+      "resource": "core",
+      "reset_at": "2026-07-03T11:00:00Z"
+    }
+  }
+}
+```
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pull-requests/snapshot \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://github.com/octocat/Hello-World/pull/1347"}'
+```
+
+Custom error responses:
+
+- `422 INVALID_PULL_REQUEST_URL`: the supplied URL is not a supported public GitHub PR URL.
+- `404 GITHUB_PULL_REQUEST_NOT_FOUND`: GitHub returned `404`.
+- `429 GITHUB_RATE_LIMITED`: GitHub rate limiting was detected.
+- `403 GITHUB_ACCESS_DENIED`: GitHub denied access without a rate-limit signal.
+- `502 GITHUB_AUTHENTICATION_FAILED`: GitHub rejected configured authentication.
+- `502 GITHUB_INVALID_RESPONSE`: GitHub returned JSON or schema data MergeSignal cannot safely normalize.
+- `502 GITHUB_PAGINATION_LIMIT_EXCEEDED`: pagination was unsafe or exceeded configured bounds.
+- `502 GITHUB_REQUEST_FAILED`: an upstream GitHub request failed outside the more specific cases.
+- `503 GITHUB_UNAVAILABLE`: GitHub transport, timeout, or transient `502`/`503`/`504` failures exhausted retries.
+
+The request body must be a JSON object with a single string field named `url`. Unknown fields and non-string values are rejected with FastAPI/Pydantic `detail` validation responses.
+
+Snapshot components:
+
+- `reference`: normalized owner, repository, pull number, and canonical URL.
+- `metadata`: pull-request metadata reported by GitHub.
+- `files`: changed files in GitHub order.
+- `commits`: commits in GitHub order.
+- `completeness`: booleans and warnings describing partial data.
+- `rate_limit`: latest successful GitHub rate-limit headers when available.
+
 ## Supported URL Format
 
 The supported URL format is:
@@ -101,8 +210,8 @@ MergeSignal rejects missing schemes, protocol-relative URLs, non-HTTPS schemes, 
 
 ## Current Limitations
 
-- No PR-existence verification.
+- PR existence is verified only when `/snapshot` calls GitHub.
 - No GitHub Enterprise support.
-- No GitHub network request in this milestone.
-- No live GitHub metadata retrieval.
+- No CI/check-run fetching.
+- No file classification or CODEOWNERS parsing.
 - No merge risk or evidence confidence calculation yet.

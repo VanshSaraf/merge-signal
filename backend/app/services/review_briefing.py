@@ -23,17 +23,18 @@ MAX_LIMITATIONS = 3
 
 
 def build_review_briefing(snapshot: PullRequestSnapshot) -> ReviewBriefing:
+    canonical_ci_ids = {_canonical_ci_item_id(item) for item in snapshot.ci_explanation.blocking_items}
     focus = _dedupe_focus(
         [
             *_ci_focus(snapshot),
             *_review_concern_focus(snapshot),
-            *_signal_focus(snapshot),
+            *_signal_focus(snapshot, suppress_generic_ci=bool(canonical_ci_ids)),
             *_evidence_focus(snapshot),
             *_priority_file_focus(snapshot),
         ]
     )[:MAX_FOCUS_ITEMS]
     priority_files = _priority_files(snapshot)
-    steps = _recommended_steps(snapshot, focus, priority_files)
+    steps = _recommended_steps(snapshot, focus, priority_files, canonical_ci_ids)
     primary_reason = _primary_reason(snapshot, focus)
     checklist = _checklist(snapshot, steps)
     limitations = _limitations(snapshot)
@@ -54,10 +55,12 @@ def build_review_briefing(snapshot: PullRequestSnapshot) -> ReviewBriefing:
 def _ci_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
     items: list[ReviewBriefingFocusItem] = []
     for item in snapshot.ci_explanation.blocking_items:
-        identifier = _ci_item_id(item.provider, item.name, item.source_type.value)
+        identifier = _canonical_ci_item_id(item)
+        category = _category_label(item.category.value)
+        title = f"Inspect failed {item.provider} check" if category == "unknown" else f"Inspect failed {item.provider} {category} check"
         items.append(
             ReviewBriefingFocusItem(
-                title=f"Inspect failed {item.provider} { _category_label(item.category.value) } check",
+                title=title,
                 description=item.description or f"{item.name} is currently failing.",
                 severity="high",
                 source_type=BriefingSourceType.CI,
@@ -94,6 +97,8 @@ def _review_concern_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingF
             items.append(_thread_focus(thread, "Respond to reviewer concern", "A reviewer concern is awaiting an author response.", "medium"))
         elif thread.lifecycle.author_claimed_addressed:
             items.append(_thread_focus(thread, "Verify the author's claimed fix", "The author claims this concern was addressed; MergeSignal has not verified the code change.", "medium"))
+        elif thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES:
+            items.append(_thread_focus(thread, "Verify the author response", "Author described changes; reviewer verification is still needed.", "medium"))
     return sorted(items, key=lambda item: (_severity_order(item.severity), item.affected_files, item.title))
 
 
@@ -109,11 +114,12 @@ def _thread_focus(thread, title: str, description: str, severity: str) -> Review
     )
 
 
-def _signal_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
+def _signal_focus(snapshot: PullRequestSnapshot, *, suppress_generic_ci: bool) -> list[ReviewBriefingFocusItem]:
     signals = [
         signal
         for signal in snapshot.signals
         if signal.severity == SignalSeverity.HIGH
+        and not (suppress_generic_ci and signal.rule_id == "ci.failing")
     ]
     return [
         ReviewBriefingFocusItem(
@@ -195,6 +201,7 @@ def _recommended_steps(
     snapshot: PullRequestSnapshot,
     focus: list[ReviewBriefingFocusItem],
     priority_files: list[ReviewBriefingPriorityFile],
+    canonical_ci_ids: set[str],
 ) -> list[ReviewBriefingStep]:
     steps: list[ReviewBriefingStep] = []
     seen: set[str] = set()
@@ -210,6 +217,8 @@ def _recommended_steps(
             source_ids=item.provenance,
         )
     for action in snapshot.review_actions:
+        if _is_generic_ci_action(action) and canonical_ci_ids:
+            continue
         _append_action_step(steps, seen, action)
         if len(steps) >= MAX_STEPS:
             break
@@ -224,11 +233,12 @@ def _recommended_steps(
             url=file.url,
             source_ids=[file.path],
         )
-    return [step.model_copy(update={"order": index}) for index, step in enumerate(steps[:MAX_STEPS], start=1)]
+    return [step.model_copy(update={"order": index}) for index, step in enumerate(_dedupe_steps(steps)[:MAX_STEPS], start=1)]
 
 
 def _append_action_step(steps: list[ReviewBriefingStep], seen: set[str], action: ReviewAction) -> None:
     url = _url_from_evidence(action.evidence)
+    evidence_ids = _review_thread_ids_from_evidence(action.evidence)
     _append_step(
         steps,
         seen,
@@ -237,7 +247,7 @@ def _append_action_step(steps: list[ReviewBriefingStep], seen: set[str], action:
         category=action.category.value,
         affected_files=action.affected_files,
         url=url,
-        source_ids=[action.id, action.rule_id],
+        source_ids=[action.id, action.rule_id, *evidence_ids],
     )
 
 
@@ -252,7 +262,7 @@ def _append_step(
     url: str | None,
     source_ids: list[str],
 ) -> None:
-    key = f"{category}:{','.join(source_ids)}:{','.join(affected_files)}"
+    key = _step_key(title, category, source_ids, affected_files)
     if key in seen or len(steps) >= MAX_STEPS:
         return
     seen.add(key)
@@ -328,12 +338,7 @@ def _summary(snapshot: PullRequestSnapshot, focus: list[ReviewBriefingFocusItem]
 
 
 def _checklist(snapshot: PullRequestSnapshot, steps: list[ReviewBriefingStep]) -> list[str]:
-    header = [
-        "MergeSignal Review Checklist",
-        f"PR: {snapshot.reference.owner}/{snapshot.reference.repository}#{snapshot.reference.pull_number}",
-        f"Status: {_title_status(snapshot.merge_readiness.decision.value)}",
-    ]
-    return [*header, *[f"[ ] {step.title}" for step in steps[:MAX_STEPS]]]
+    return [f"[ ] {step.title}" for step in _dedupe_steps(steps)[:MAX_STEPS]]
 
 
 def _limitations(snapshot: PullRequestSnapshot) -> list[str]:
@@ -374,6 +379,36 @@ def _dedupe_focus(items: list[ReviewBriefingFocusItem]) -> list[ReviewBriefingFo
     return deduped
 
 
+def _dedupe_steps(steps: list[ReviewBriefingStep]) -> list[ReviewBriefingStep]:
+    deduped: list[ReviewBriefingStep] = []
+    seen: set[str] = set()
+    for step in steps:
+        key = _step_key(step.title, step.category, step.source_ids, step.affected_files)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(step)
+    return deduped
+
+
+def _step_key(title: str, category: str, source_ids: list[str], affected_files: list[str]) -> str:
+    if category == "ci":
+        ci_ids = sorted(id for id in source_ids if id.startswith("ci:"))
+        if ci_ids:
+            return f"ci:{','.join(ci_ids)}"
+        return "ci:generic"
+    if category in {"review_concern", "review"}:
+        thread_ids = sorted(id for id in source_ids if id.startswith("review-thread-"))
+        if thread_ids:
+            return f"review_concern:{','.join(thread_ids)}"
+    normalized_title = title.casefold().replace("the ", "").replace("author's ", "author ")
+    return f"{category}:{normalized_title}:{','.join(source_ids)}:{','.join(affected_files)}"
+
+
+def _is_generic_ci_action(action: ReviewAction) -> bool:
+    return action.rule_id == "action.inspect_failing_ci"
+
+
 def _file_reason_text(file) -> str:
     return "; ".join(factor.description for factor in file.factors[:2]) or f"{file.level.value} priority changed file."
 
@@ -394,6 +429,17 @@ def _url_from_evidence(evidence: list[str]) -> str | None:
         if item.startswith(marker):
             return _safe_url(item.removeprefix(marker).strip())
     return None
+
+
+def _review_thread_ids_from_evidence(evidence: list[str]) -> list[str]:
+    ids: list[str] = []
+    for item in evidence:
+        marker = "Conversation: "
+        if item.startswith(marker):
+            value = item.removeprefix(marker).strip().rstrip(".")
+            if value.startswith("review-thread-"):
+                ids.append(value)
+    return sorted(set(ids))
 
 
 def _safe_url(value: str | None) -> str | None:
@@ -418,8 +464,11 @@ def _category_label(category: str) -> str:
     return category.replace("_", " ")
 
 
-def _ci_item_id(provider: str, name: str, source_type: str) -> str:
-    return f"ci:{source_type}:{provider}:{name}"
+def _canonical_ci_item_id(item) -> str:
+    provider = str(item.provider or "unknown").strip() or "unknown"
+    name = str(item.name or provider).strip() or provider
+    detail = _safe_url(item.details_url) or ""
+    return f"ci:{item.source_type.value}:{provider.casefold()}:{name.casefold()}:{detail}"
 
 
 def _severity_order(value: str) -> int:

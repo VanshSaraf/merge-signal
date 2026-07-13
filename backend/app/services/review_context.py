@@ -27,6 +27,9 @@ CREDENTIAL_VALUE_PATTERN = re.compile(
 AUTHOR_ADDRESSED_PATTERN = re.compile(
     r"(?i)(\bfixed\b|\baddressed\b|\bupdated\b|\bresolved\b|\bdone\b|\bpushed\s+a\s+fix\b|\bhandled\s+this\b|\bchanged\s+this\b)"
 )
+AUTHOR_DESCRIBED_CHANGES_PATTERN = re.compile(
+    r"(?i)(\bchanged\s+(this|it|the|to|from)\b|\bmoved\b|\bremoved\b|\badded\b|\bupdated\b|\bimplemented\b|\badjusted\b|\bnow\s+includes?\b|\bnow\s+preserves?\b|\bnow\s+only\s+runs\b|\bno\s+longer\s+runs\b)"
+)
 
 REVIEW_LIMITATIONS = [
     "Review context reports observable GitHub review state only.",
@@ -263,6 +266,7 @@ def _derive_thread_lifecycle(
             None,
         )
     claimed_reply = next((reply for reply in reversed(author_replies) if AUTHOR_ADDRESSED_PATTERN.search(reply.body_excerpt)), None)
+    described_reply = next((reply for reply in reversed(author_replies) if AUTHOR_DESCRIBED_CHANGES_PATTERN.search(reply.body_excerpt)), None)
     is_outdated = root.current_position is None and root.original_position is not None
     latest_state = next((state for state in latest_reviewer_states if state.reviewer_login == root.reviewer_login), None)
     active_change_request = latest_state is not None and latest_state.state == ReviewState.CHANGES_REQUESTED
@@ -293,6 +297,11 @@ def _derive_thread_lifecycle(
         needs_attention = True
         summary = "The author claims this concern was addressed; reviewer confirmation is not visible."
         provenance.append(_provenance("author_claim", claimed_reply, "Author reply matched bounded addressed-claim language."))
+    elif described_reply is not None:
+        state = ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES
+        needs_attention = True
+        summary = "Author described changes; reviewer verification is still needed."
+        provenance.append(_provenance("author_described_changes", described_reply, "Author reply matched bounded change-description language."))
     elif latest_author_reply is not None:
         state = ReviewConcernAttentionState.AUTHOR_REPLIED
         needs_attention = active_change_request
@@ -333,10 +342,11 @@ def _derive_thread_lifecycle(
     return ReviewThreadLifecycle(
         attention_state=state,
         needs_attention=needs_attention,
-        verification_needed=state == ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED,
+        verification_needed=state in {ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED, ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES},
         has_author_reply=bool(author_replies),
         has_reviewer_follow_up=reviewer_follow_up is not None,
         author_claimed_addressed=claimed_reply is not None and reviewer_follow_up is None,
+        author_described_changes=described_reply is not None and claimed_reply is None and reviewer_follow_up is None,
         is_outdated=is_outdated,
         resolution_visibility=ResolutionVisibility.UNAVAILABLE,
         active_latest_change_request=active_change_request,
@@ -427,6 +437,7 @@ def _build_concern_summary(
         needing_attention_count=needing_attention,
         awaiting_author_response_count=state_counts[ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE],
         author_replied_count=state_counts[ReviewConcernAttentionState.AUTHOR_REPLIED],
+        author_described_changes_count=state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES],
         author_claimed_addressed_count=state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED],
         reviewer_follow_up_count=state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP],
         outdated_count=state_counts[ReviewConcernAttentionState.OUTDATED],
@@ -443,20 +454,52 @@ def _concern_summary_text(
     state_counts: Counter,
     active_change_requests: int,
 ) -> str:
-    if not sum(state_counts.values()):
+    total = sum(state_counts.values())
+    if not total:
         return "No inline review conversations were observed."
+    if state_counts[ReviewConcernAttentionState.INFORMATIONAL] == total:
+        return f"All {_conversation_count(total)} are informational."
+    if state_counts[ReviewConcernAttentionState.OUTDATED] == total:
+        return f"All {_conversation_count(total)} are marked outdated by observable GitHub metadata."
+    if state_counts[ReviewConcernAttentionState.AUTHOR_REPLIED] == total:
+        return f"The author replied to {_conversation_count(total)}; reviewer confirmation is not visible."
+    if state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES] == total:
+        return f"The author described changes in {_conversation_count(total)}; reviewer verification is still needed."
+    if state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED] == total:
+        return f"The author claimed {_conversation_count(total)} addressed; reviewer confirmation is not visible."
+    if state_counts[ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE] == total:
+        return f"{_sentence_start_count(total)} {_needs_need(total)} an author response."
+    if state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP] == total:
+        return f"{_sentence_start_count(total)} {_needs_need(total)} reviewer follow-up after an author response."
+
     parts: list[str] = []
     if needing_attention:
-        parts.append(f"{needing_attention} review { _plural('conversation', needing_attention) } { _needs_need(needing_attention) } attention")
-    if state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED]:
-        count = state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED]
-        parts.append(f"author says {count} { _plural('concern', count) } addressed")
-    if state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP]:
-        count = state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP]
-        parts.append(f"{count} reviewer { _plural('follow-up', count) }")
+        parts.append(f"{needing_attention} {_plural('review conversation', needing_attention)} {_needs_need(needing_attention)} attention")
+    for state, label in (
+        (ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE, "awaiting author response"),
+        (ReviewConcernAttentionState.AUTHOR_REPLIED, "with author replies"),
+        (ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES, "where the author described changes"),
+        (ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED, "where the author claimed addressed"),
+        (ReviewConcernAttentionState.REVIEWER_FOLLOW_UP, "with reviewer follow-up"),
+        (ReviewConcernAttentionState.OUTDATED, "outdated"),
+        (ReviewConcernAttentionState.INFORMATIONAL, "informational"),
+        (ReviewConcernAttentionState.UNKNOWN, "unknown"),
+    ):
+        count = state_counts[state]
+        if count:
+            parts.append(f"{count} {label}")
     if active_change_requests:
-        parts.append(f"{active_change_requests} latest change { _plural('request', active_change_requests) }")
-    return "; ".join(parts) + "."
+        parts.append(f"{active_change_requests} latest change {_plural('request', active_change_requests)}")
+    summary = "; ".join(parts).strip()
+    return f"{summary}." if summary else "Review conversations were observed, but no specialized lifecycle summary applies."
+
+
+def _conversation_count(count: int) -> str:
+    return f"{count} {_plural('review conversation', count)}"
+
+
+def _sentence_start_count(count: int) -> str:
+    return f"{count} {_plural('review conversation', count)}"
 
 
 def _plural(word: str, count: int) -> str:

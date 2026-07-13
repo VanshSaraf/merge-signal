@@ -26,7 +26,7 @@ Version `v1` includes explicit rules for:
 - Merge conflicts, failing CI, credential-like literals, security-control settings, destructive migrations, sensitive changes without test files, and deleted tests.
 - Pending CI, CI visibility gaps, migrations without patch visibility, runtime configuration, dependency manifests, infrastructure changes, large change scope, incomplete evidence, and sensitive renames.
 - Code-quality hints and generated or opaque changes.
-- Review-concern lifecycle prompts for active latest change requests, reviewer follow-ups, conversations awaiting author response, and author-claimed-addressed concerns.
+- Review-concern lifecycle prompts for active latest change requests, reviewer follow-ups, conversations awaiting author response, author-described-change responses, and author-claimed-addressed concerns.
 - A baseline `action.review_highest_priority_files` action when ranked files exist.
 
 The baseline file-review action includes at most the top five ranked file paths. A file omitted from an action must not be ignored.
@@ -43,6 +43,7 @@ Suppression keeps output concise:
 - Destructive migration and migration-without-patch actions may coexist.
 - Credential and security-control actions remain distinct.
 - Reviewer follow-ups and active latest change requests take precedence over lower-priority concern states for a conversation.
+- Author-described-change actions ask for verification and do not claim the response resolved the concern.
 - The baseline file-review action never replaces specific actions.
 
 Affected files are ordered by ranked-file position when available, then by path case-insensitively, then by original path.
@@ -58,6 +59,7 @@ Credential and security-control actions never include suspected secret values, r
 - A credential-like literal signal produces `action.verify_credential_like_literal` without exposing the suspected value.
 - An active latest change request attached to an inline conversation produces `action.review_concern.active_change_request`.
 - An author reply that claims a concern was addressed can produce `action.review_concern.verify_author_claim` when no higher-priority concern action applies.
+- An author reply that describes concrete changes can produce `action.review_concern.verify_author_response` when no higher-priority concern action applies.
 - Ranked files produce `action.review_highest_priority_files` as a review-order summary.
 
 ## Limitations

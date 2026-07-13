@@ -181,6 +181,8 @@ def _review_concern_rule_id(thread: ReviewThreadRecord) -> str | None:
         return "action.review_concern.awaiting_author_response"
     if thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED:
         return "action.review_concern.verify_author_claim"
+    if thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES:
+        return "action.review_concern.verify_author_response"
     return None
 
 

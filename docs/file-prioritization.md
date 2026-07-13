@@ -11,7 +11,7 @@ Snapshot responses include:
 - `ranked_files`: every changed file exactly once, ordered by deterministic review priority.
 - `file_priority_summary`: counts by priority level, up to ten highest-priority paths, visibility counts, signal-factor counts, rule version, and limitations.
 
-Each ranked file includes current path, previous path for renames, status, score, level, classification fields, path context, change magnitude, line counts, related signal IDs, applied factors, and limitations.
+Each ranked file includes current path, previous path for renames, status, score, level, classification fields, path context, change magnitude, line counts, related signal IDs, applied factors, and limitations. Related signal IDs use the same canonical file-signal association logic used by file-priority factors and UI counts.
 
 ## Levels
 
@@ -27,14 +27,14 @@ Scores are bounded from 0 to 100.
 Version `v1` uses capped factor groups:
 
 - `review_attention`: capped at 25 points. Current inline review conversations can contribute when they show reviewer follow-up, active latest change requests, awaiting author response, or author-claimed-addressed verification needs. Outdated conversations do not contribute by themselves.
-- `signal_impact`: capped at 50 points. Only signals whose `affected_files` explicitly contain the current file path can contribute. PR-level metadata and CI signals are not assigned to every file.
+- `signal_impact`: capped at 50 points. Only signals whose `affected_files` explicitly contain the current file path, or the previous path for a renamed file, can contribute. Exact normalized repository-relative paths are matched before any fallback, and basename-only matching is not used. PR-level metadata and global CI signals are not assigned to every file.
 - `file_context`: capped at 25 points. Admin surfaces, protected route groups, route pages, dynamic routes, and user-facing route conventions can contribute.
 - `sensitive_area`: capped at 25 points. Security, authentication, authorization, database, infrastructure, CI/CD, API, runtime configuration, and database migration classifications can contribute.
 - `change_size`: capped at 15 points. Changed-line magnitude uses additions plus deletions.
 - `visibility`: capped at 5 points. Patch-eligible files with missing patches, binary files, opaque generated files, and truncation warnings can contribute. Assets are not penalized merely because GitHub omits patch text.
 - `rename_transition`: capped at 5 points. Moving into sensitive areas, moving out of test classification, or moving into generated classification can contribute.
 
-Unknown signal rule IDs contribute zero points. Signal IDs are deduplicated.
+Unknown signal rule IDs contribute zero points to priority scoring, but file-specific related signal IDs remain visible for traceability. Signal IDs are deduplicated.
 
 Scores remain globally bounded to 100 even though group caps are independent.
 

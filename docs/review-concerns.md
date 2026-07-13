@@ -14,6 +14,7 @@ It does not answer whether the underlying code is correct, whether a reviewer ac
 | --- | --- |
 | `awaiting_author_response` | A non-author root comment has no later author reply. |
 | `author_replied` | The PR author replied after the root comment without bounded addressed-claim wording. |
+| `author_described_changes` | The PR author replied with bounded change-oriented wording such as changed this, moved, removed, added, updated, implemented, adjusted, now preserves, now only runs, or no longer runs. This requires reviewer verification and is not proof of resolution. |
 | `author_claimed_addressed` | The PR author used bounded wording such as fixed, addressed, updated, resolved, or done. This is a claim only. |
 | `reviewer_follow_up` | A non-author participant replied after the latest author reply. |
 | `outdated` | GitHub position metadata indicates the root inline comment no longer has a current position. |
@@ -26,7 +27,7 @@ Each lifecycle includes provenance records for the facts used to derive the stat
 
 - root comment identity and author
 - PR author identity when available
-- author reply or addressed-claim comment
+- author reply, change-description reply, or addressed-claim comment
 - reviewer follow-up comment
 - latest observable reviewer state
 - head-SHA mismatch evidence for stale approval visibility
@@ -46,6 +47,7 @@ Lifecycle state can create deterministic review actions:
 - active latest change requests produce `action.review_concern.active_change_request`
 - reviewer follow-ups produce `action.review_concern.reviewer_follow_up`
 - awaiting-author conversations produce `action.review_concern.awaiting_author_response`
+- author-described-change conversations produce `action.review_concern.verify_author_response` when no higher-priority lifecycle action applies
 - author-claimed-addressed conversations produce `action.review_concern.verify_author_claim` when no higher-priority lifecycle action applies
 
 Actions remain prompts for human review. They do not generate fixes or assert defects.
@@ -56,8 +58,8 @@ MergeSignal does not use GitHub GraphQL review-thread resolution state in this m
 
 - label conversations formally resolved or unresolved
 - infer reviewer agreement from natural-language replies
+- treat author-described changes as reviewer-confirmed fixes
 - prove that author-claimed fixes changed the right code
 - make approval validity decisions
 - alter merge risk, evidence confidence, or readiness from lifecycle alone
 - execute repository code, install dependencies, or modify analyzed repositories
-

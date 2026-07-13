@@ -1428,6 +1428,17 @@ input:disabled {
   font-size: 0.98rem;
 }
 
+.review-excerpt,
+.review-comment p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.review-timeline {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .review-comment {
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -1435,10 +1446,6 @@ input:disabled {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-}
-
-.review-comment p {
-  white-space: pre-wrap;
 }
 
 .review-comment small {

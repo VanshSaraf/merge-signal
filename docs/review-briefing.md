@@ -47,7 +47,7 @@ Focus items are ordered by deterministic precedence:
 10. production changes without test-file changes through existing actions
 11. lower-priority reviewer guidance
 
-The implementation deduplicates related evidence so a failing CI readiness reason, CI signal, and CI action normally become one focus item.
+The implementation deduplicates related evidence so a failing CI readiness reason, specific CI blocking item, CI signal, and CI action normally become one focus item. CI deduplication uses a canonical evidence identity derived from source type, normalized provider, normalized check or context name, and the safe details URL when present. Distinct failing checks keep distinct identities and remain separate.
 
 ## Headlines
 
@@ -55,17 +55,14 @@ Headlines use the current readiness status and the strongest traceable reason. C
 
 ## Checklist
 
-Checklist output is stable plain text:
+Checklist output is stable plain text with up to five non-overlapping reviewer actions:
 
 ```text
-MergeSignal Review Checklist
-PR: owner/repository#123
-Status: Blocked
 [ ] Inspect failed deployment check
 [ ] Review the latest reviewer follow-up
 ```
 
-Checklist lines avoid raw patches, comment technical IDs, credentials, and unsupported claims.
+Checklist lines suppress generic CI wording when a more specific CI blocker exists. They avoid raw patches, comment technical IDs, credentials, and unsupported claims.
 
 ## Safe Links
 
@@ -81,4 +78,3 @@ Links are omitted when unsafe, incomplete, non-HTTPS, or credential-bearing.
 ## Limitations
 
 The briefing is deterministic workflow guidance, not semantic code review. It does not prove correctness, verify author-claimed fixes, infer formal review-thread resolution, or expand evidence confidence beyond collected sources.
-

@@ -239,6 +239,45 @@ def test_author_reply_and_author_claimed_addressed_are_distinct_with_boundaries(
     assert false_positive.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
 
 
+def test_author_described_changes_requires_verification_without_claiming_resolution() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(46, "reviewer", "Can the status survive tab changes?", created_at=BASE_TIME),
+            comment(47, "octocat", "The links now preserve the selected status.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=46),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    lifecycle = context.threads[0].lifecycle
+    assert lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES
+    assert lifecycle.verification_needed is True
+    assert lifecycle.author_described_changes is True
+    assert lifecycle.author_claimed_addressed is False
+    assert lifecycle.summary == "Author described changes; reviewer verification is still needed."
+
+
+def test_author_described_changes_avoids_common_false_positive_words() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(48, "reviewer", "Can you check this?", created_at=BASE_TIME),
+            comment(49, "octocat", "The prefix changed upstream, I can look later.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=48),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert context.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
+
+
 def test_reviewer_follow_up_takes_priority_after_author_claim() -> None:
     context = build_review_context(
         [],
@@ -340,3 +379,23 @@ def test_lifecycle_summary_counts_and_provenance_are_thread_scoped() -> None:
     assert "2 review conversations need attention" in context.concern_summary.summary
     first_thread_comment_ids = {fact.comment_id for fact in context.threads[0].lifecycle.provenance if fact.comment_id}
     assert first_thread_comment_ids <= {80, 81}
+
+
+def test_author_replied_summary_is_grammatical_without_punctuation_only_text() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(90, "reviewer", "Please check this.", created_at=BASE_TIME),
+            comment(91, "octocat", "I can look at this soon.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=90),
+            comment(92, "reviewer", "Please check this too.", created_at=BASE_TIME + timedelta(minutes=2)),
+            comment(93, "octocat", "I can look at this too.", created_at=BASE_TIME + timedelta(minutes=3), in_reply_to_id=92),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert context.concern_summary.summary == "The author replied to 2 review conversations; reviewer confirmation is not visible."
+    assert context.concern_summary.summary.strip(".")

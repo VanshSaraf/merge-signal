@@ -374,12 +374,42 @@ def test_signal_factors_apply_only_to_explicit_current_file_paths() -> None:
     )
     by_path = {file.path: file for file in ranked_files}
 
-    assert by_path["backend/app/auth/session.py"].related_signal_ids == ["sig-1", "sig-2"]
+    assert by_path["backend/app/auth/session.py"].related_signal_ids == ["sig-1", "sig-2", "unknown"]
     assert [factor.id for factor in by_path["backend/app/auth/session.py"].factors if factor.category == "signal_impact"] == [
         "signal.security.credential_like_literal_added"
     ]
     assert by_path["backend/app/auth/other.py"].related_signal_ids == []
     assert summary.files_with_signal_factors == 1
+
+
+def test_file_specific_signal_association_includes_non_weighted_related_signals() -> None:
+    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    signals = [signal("testing.production_change_without_test_files", signal_id="sig-tests", affected_files=[path], category=SignalCategory.TESTING)]
+    ranked_files, _summary = calculate_file_priorities(
+        snapshot([changed_file(path, additions=204, deletions=175, changes=379)], signals=signals)
+    )
+
+    assert ranked_files[0].related_signal_ids == ["sig-tests"]
+
+
+def test_renamed_file_signal_association_supports_previous_path_without_basename_fallback() -> None:
+    signals = [
+        signal("security.credential_like_literal_added", signal_id="sig-previous", affected_files=["old/auth/session.py"], category=SignalCategory.SECURITY),
+        signal("security.credential_like_literal_added", signal_id="sig-basename", affected_files=["other/session.py"], category=SignalCategory.SECURITY),
+    ]
+    ranked_files, _summary = calculate_file_priorities(
+        snapshot(
+            [
+                changed_file("backend/app/auth/session.py", status="renamed", previous_filename="old/auth/session.py"),
+                changed_file("backend/app/auth/other.py"),
+            ],
+            signals=signals,
+        )
+    )
+    by_path = {file.path: file for file in ranked_files}
+
+    assert by_path["backend/app/auth/session.py"].related_signal_ids == ["sig-previous"]
+    assert by_path["backend/app/auth/other.py"].related_signal_ids == []
 
 
 def test_group_caps_and_total_cap_are_enforced_deterministically() -> None:

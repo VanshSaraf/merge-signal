@@ -124,8 +124,9 @@ function snapshotResponse(overrides = {}) {
         total_conversations: 1,
         needing_attention_count: 1,
         awaiting_author_response_count: 0,
-        author_replied_count: 0,
-        author_claimed_addressed_count: 1,
+      author_replied_count: 0,
+      author_described_changes_count: 0,
+      author_claimed_addressed_count: 1,
         reviewer_follow_up_count: 0,
         outdated_count: 0,
         informational_count: 0,
@@ -160,6 +161,7 @@ function snapshotResponse(overrides = {}) {
             has_author_reply: true,
             has_reviewer_follow_up: false,
             author_claimed_addressed: true,
+            author_described_changes: false,
             is_outdated: false,
             resolution_visibility: "unavailable",
             active_latest_change_request: true,
@@ -548,9 +550,10 @@ function threadFixture(id, lifecycle, overrides = {}) {
       attention_state: lifecycle,
       needs_attention: ["awaiting_author_response", "reviewer_follow_up"].includes(lifecycle),
       verification_needed: lifecycle === "author_claimed_addressed",
-      has_author_reply: ["author_replied", "author_claimed_addressed", "reviewer_follow_up"].includes(lifecycle),
+      has_author_reply: ["author_replied", "author_described_changes", "author_claimed_addressed", "reviewer_follow_up"].includes(lifecycle),
       has_reviewer_follow_up: lifecycle === "reviewer_follow_up",
       author_claimed_addressed: lifecycle === "author_claimed_addressed",
+      author_described_changes: lifecycle === "author_described_changes",
       is_outdated: lifecycle === "outdated",
       resolution_visibility: "unavailable",
       active_latest_change_request: overrides.active_latest_change_request ?? false,
@@ -891,12 +894,14 @@ describe("App", () => {
     expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Blocked by failed vercel authorization/configuration check.");
     expect(screen.getByRole("link", { name: "Open blocking check" })).toHaveAttribute("href", "https://vercel.com/git/authorize?repo=octocat");
     expect(screen.getByRole("region", { name: "CI surface summary" })).toHaveTextContent("2 checks passed");
+    expect(screen.getByRole("region", { name: "CI surface summary" })).not.toHaveTextContent("VercelVercel");
     expect(screen.getAllByText("Authorization required to deploy.").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
 
     await user.click(screen.getByText("View CI surface details"));
     expect(screen.getByText("Static checks & unit tests")).toBeInTheDocument();
     expect(screen.getByText("End-to-end tests")).toBeInTheDocument();
+    expect(screen.queryByText("VercelVercel")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Actions" }));
     await user.click(screen.getByRole("button", { name: "View details" }));
@@ -912,6 +917,7 @@ describe("App", () => {
 
     expect(await screen.findByLabelText("Review context summary")).toHaveTextContent("1 review conversation needs attention");
     expect(screen.getByLabelText("Review context summary")).toHaveTextContent("1 reviewer currently requests changes");
+    expect(screen.queryByText(/true inline conversations/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Reviews (1)" }));
 
     expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Needs attention");
@@ -1022,6 +1028,7 @@ describe("App", () => {
             needing_attention_count: 2,
             awaiting_author_response_count: 1,
             author_replied_count: 1,
+            author_described_changes_count: 0,
             author_claimed_addressed_count: 0,
             reviewer_follow_up_count: 1,
             outdated_count: 1,
@@ -1059,6 +1066,97 @@ describe("App", () => {
     expect(technicalDetails).not.toHaveAttribute("open");
   });
 
+  it("renders author-response verification wording and readable review text", async () => {
+    const user = userEvent.setup();
+    const thread = threadFixture(741, "author_described_changes", {
+      body_excerpt: "### Summary\nPlease preserve `?status=` when switching tabs.",
+      summary: "Author described changes; reviewer verification is still needed.",
+      replies: [
+        {
+          id: 742,
+          reviewer_login: "octocat",
+          body_excerpt: "Both links now include `status=${activeStatus.key}`.",
+          created_at: "2026-07-13T10:42:00Z",
+          updated_at: null,
+          html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r742",
+          pull_request_review_id: 700,
+          in_reply_to_id: 741,
+          path: "backend/app/main.py",
+          line: 12,
+          current_position: 3,
+          original_position: 3,
+        },
+      ],
+    });
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshotResponse({
+        review_context: {
+          ...snapshotResponse().review_context,
+          comment_count: 2,
+          thread_count: 1,
+          concern_summary: {
+            ...snapshotResponse().review_context.concern_summary,
+            total_conversations: 1,
+            needing_attention_count: 1,
+            awaiting_author_response_count: 0,
+            author_replied_count: 0,
+            author_described_changes_count: 1,
+            author_claimed_addressed_count: 0,
+            reviewer_follow_up_count: 0,
+            outdated_count: 0,
+            informational_count: 0,
+            unknown_count: 0,
+            active_latest_change_request_count: 0,
+            potentially_stale_approval_count: 0,
+            summary: "The author described changes in 1 review conversation; reviewer verification is still needed.",
+          },
+          threads: [thread],
+        },
+        review_briefing: {
+          ...snapshotResponse().review_briefing,
+          review_focus: [
+            {
+              title: "Verify the author response",
+              description: "Author described changes; reviewer verification is still needed.",
+              severity: "medium",
+              source_type: "review_concern",
+              affected_files: ["backend/app/main.py"],
+              url: "https://github.com/octocat/Hello-World/pull/42#discussion_r741",
+              provenance: ["review-thread-741"],
+            },
+          ],
+          recommended_steps: [
+            {
+              order: 1,
+              title: "Verify the author response",
+              description: "Author described changes; reviewer verification is still needed.",
+              category: "review_concern",
+              affected_files: ["backend/app/main.py"],
+              url: "https://github.com/octocat/Hello-World/pull/42#discussion_r741",
+              source_ids: ["review-thread-741"],
+            },
+          ],
+          checklist: ["[ ] Verify the author response"],
+        },
+      }));
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    expect((await screen.findAllByText("Verify the author response")).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Reviews (1)" }));
+    expect(screen.getAllByText("Author response needs verification").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Please preserve \?status= when switching tabs/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View conversation" }));
+    expect(screen.getByText("Both links now include status=${activeStatus.key}.")).toBeInTheDocument();
+    expect(screen.queryByText(/verified fix/i)).not.toBeInTheDocument();
+  });
+
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -1069,6 +1167,7 @@ describe("App", () => {
 
     expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
     expect(screen.getByText("app/(protected)/admin/cohort/[id]/page.tsx")).toBeInTheDocument();
+    expect(screen.getAllByText("1 signals").length).toBeGreaterThan(0);
     expect(screen.getByText("Admin")).toBeInTheDocument();
     expect(screen.getByText("Protected route")).toBeInTheDocument();
     expect(screen.getByText("Dynamic page")).toBeInTheDocument();
@@ -1241,6 +1340,7 @@ describe("App", () => {
           needing_attention_count: 0,
           awaiting_author_response_count: 0,
           author_replied_count: 0,
+          author_described_changes_count: 0,
           author_claimed_addressed_count: 0,
           reviewer_follow_up_count: 0,
           outdated_count: 0,
@@ -1349,6 +1449,7 @@ describe("App", () => {
             needing_attention_count: 0,
             awaiting_author_response_count: 0,
             author_replied_count: 0,
+            author_described_changes_count: 0,
             author_claimed_addressed_count: 0,
             reviewer_follow_up_count: 0,
             outdated_count: 0,

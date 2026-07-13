@@ -87,3 +87,42 @@ export function extractSafeUrl(text) {
   const match = String(text ?? "").match(/https:\/\/[^\s)]+/);
   return match ? safeHttpUrl(match[0]) : null;
 }
+
+export function providerDisplayName(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "Unknown provider";
+  const lower = normalized.toLowerCase();
+  if (lower === "github actions" || lower === "github-actions") return "GitHub Actions";
+  if (lower === "circleci" || lower === "circle ci") return "CircleCI";
+  if (lower === "vercel") return "Vercel";
+  return normalized;
+}
+
+export function ciItemDisplayParts(item) {
+  const provider = providerDisplayName(item?.provider);
+  const name = String(item?.name ?? "").trim();
+  return {
+    provider,
+    name: name && name.toLowerCase() !== provider.toLowerCase() ? name : "",
+  };
+}
+
+export function plainReviewText(value) {
+  return String(value ?? "")
+    .replace(/```[\s\S]*?```/g, (match) => match.replace(/```[a-zA-Z0-9_-]*|```/g, "").trim())
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]+\)/g, "[image omitted]")
+    .replace(/\[([^\]]+)]\((https?:\/\/[^)]+)\)/g, "$1")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/[*_~]{1,3}/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function reviewCountLabel(count, unavailable = false) {
+  if (unavailable) return "Review context unavailable";
+  const value = Number(count ?? 0);
+  if (value <= 0) return "No inline conversations";
+  return `${value} inline ${value === 1 ? "conversation" : "conversations"}`;
+}

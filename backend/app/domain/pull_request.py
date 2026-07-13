@@ -417,6 +417,7 @@ class ReviewState(StrEnum):
 class ReviewConcernAttentionState(StrEnum):
     AWAITING_AUTHOR_RESPONSE = "awaiting_author_response"
     AUTHOR_REPLIED = "author_replied"
+    AUTHOR_DESCRIBED_CHANGES = "author_described_changes"
     AUTHOR_CLAIMED_ADDRESSED = "author_claimed_addressed"
     REVIEWER_FOLLOW_UP = "reviewer_follow_up"
     OUTDATED = "outdated"
@@ -607,6 +608,7 @@ class ReviewThreadLifecycle(StrictDomainModel):
     has_author_reply: bool = Field(description="Whether the PR author replied after the root comment.")
     has_reviewer_follow_up: bool = Field(description="Whether a non-author participant replied after the latest author reply.")
     author_claimed_addressed: bool = Field(description="Whether a PR-author reply contains bounded addressed-claim language.")
+    author_described_changes: bool = Field(description="Whether a PR-author reply contains bounded change-description language.")
     is_outdated: bool = Field(description="Whether GitHub metadata indicates the inline position is outdated.")
     resolution_visibility: ResolutionVisibility = Field(description="Whether formal thread resolution is observable.")
     active_latest_change_request: bool = Field(description="Whether the root reviewer currently has latest observable changes-requested state.")
@@ -624,6 +626,7 @@ def empty_thread_lifecycle() -> ReviewThreadLifecycle:
         has_author_reply=False,
         has_reviewer_follow_up=False,
         author_claimed_addressed=False,
+        author_described_changes=False,
         is_outdated=False,
         resolution_visibility=ResolutionVisibility.UNAVAILABLE,
         active_latest_change_request=False,
@@ -665,6 +668,7 @@ class ReviewConcernSummary(StrictDomainModel):
     needing_attention_count: int = Field(description="Conversations that need attention.")
     awaiting_author_response_count: int = Field(description="Conversations awaiting author response.")
     author_replied_count: int = Field(description="Conversations where the author replied without later reviewer follow-up.")
+    author_described_changes_count: int = Field(description="Conversations where the author described concrete changes without reviewer confirmation.")
     author_claimed_addressed_count: int = Field(description="Conversations where the author claimed the concern was addressed.")
     reviewer_follow_up_count: int = Field(description="Conversations with reviewer follow-up after author response.")
     outdated_count: int = Field(description="Conversations marked outdated by observable GitHub metadata.")
@@ -717,6 +721,7 @@ def empty_review_context() -> ReviewContext:
             needing_attention_count=0,
             awaiting_author_response_count=0,
             author_replied_count=0,
+            author_described_changes_count=0,
             author_claimed_addressed_count=0,
             reviewer_follow_up_count=0,
             outdated_count=0,

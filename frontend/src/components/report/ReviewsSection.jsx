@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { titleCase } from "../../utils/formatting.js";
-import { safeHttpUrl } from "../../utils/report.js";
+import { plainReviewText, reviewCountLabel, safeHttpUrl } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 
 export function ReviewsSection({ reviewContext }) {
@@ -19,7 +19,7 @@ export function ReviewsSection({ reviewContext }) {
         {context.warnings?.length > 0 && <DisclosureList title="Review-context warnings" items={context.warnings} />}
       </Card>
 
-      <Card title="Inline conversations" eyebrow={`${threads.length} conversations`}>
+      <Card title="Inline conversations" eyebrow={reviewCountLabel(threads.length, context.visibility === "unavailable")}>
         {threads.length === 0 ? (
           <p className="empty-result">{emptyMessage(context)}</p>
         ) : (
@@ -45,6 +45,7 @@ function ReviewSummary({ context }) {
     ["Needs attention", concern.needing_attention_count ?? 0],
     ["Awaiting response", concern.awaiting_author_response_count ?? 0],
     ["Author replied", concern.author_replied_count ?? 0],
+    ["Author response needs verification", concern.author_described_changes_count ?? 0],
     ["Author says addressed", concern.author_claimed_addressed_count ?? 0],
     ["Reviewer follow-up", concern.reviewer_follow_up_count ?? 0],
     ["Outdated", concern.outdated_count ?? 0],
@@ -79,6 +80,7 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
   const lifecycle = thread.lifecycle ?? {};
   const location = [thread.path, lineLabel(thread)].filter(Boolean).join(":");
   const githubUrl = safeHttpUrl(thread.html_url);
+  const excerpt = plainReviewText(root.body_excerpt) || "No comment text available.";
 
   return (
     <article className="report-item review-thread-row">
@@ -91,7 +93,7 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
         {lifecycle.has_reviewer_follow_up && <span>Reviewer followed up</span>}
       </div>
       <h3>{location || "Inline review conversation"}</h3>
-      <p>{root.body_excerpt || "No comment text available."}</p>
+      <p className="review-excerpt">{excerpt}</p>
       <button className="button-link action-details-toggle" type="button" onClick={onToggle} aria-expanded={expanded}>
         {expanded ? "Hide conversation" : "View conversation"}
       </button>
@@ -102,8 +104,10 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
             <p>{lifecycle.summary ?? "Lifecycle evidence is unavailable."}</p>
             <small>MergeSignal cannot verify that the code change resolves this concern.</small>
           </div>
-          <CommentBlock comment={root} label="Root comment" />
-          {replies.map((reply) => <CommentBlock comment={reply} key={reply.id} label="Reply" />)}
+          <div className="review-timeline" aria-label="Review conversation timeline">
+            <CommentBlock comment={root} label="Root comment" />
+            {replies.map((reply) => <CommentBlock comment={reply} key={reply.id} label="Reply" />)}
+          </div>
           {githubUrl && <a className="button button--secondary button--compact" href={githubUrl} target="_blank" rel="noreferrer">Open on GitHub</a>}
           <DisclosureList title="Participants" items={thread.participant_logins ?? []} />
           <details className="mini-list">
@@ -129,7 +133,7 @@ function CommentBlock({ comment, label }) {
   return (
     <div className="review-comment">
       <strong>{label} · {comment.reviewer_login ?? "Unknown"}</strong>
-      <p>{comment.body_excerpt || "No comment text available."}</p>
+      <p>{plainReviewText(comment.body_excerpt) || "No comment text available."}</p>
       <small>{formatTimestamp(comment.created_at)}</small>
     </div>
   );
@@ -173,6 +177,7 @@ function attentionLabel(state) {
   return {
     awaiting_author_response: "Needs author response",
     author_replied: "Author replied",
+    author_described_changes: "Author response needs verification",
     author_claimed_addressed: "Author says addressed",
     reviewer_follow_up: "Reviewer followed up",
     outdated: "Outdated conversation",
@@ -185,6 +190,7 @@ function attentionTone(state) {
   return {
     awaiting_author_response: "warning",
     author_replied: "info",
+    author_described_changes: "warning",
     author_claimed_addressed: "warning",
     reviewer_follow_up: "danger",
     outdated: "neutral",

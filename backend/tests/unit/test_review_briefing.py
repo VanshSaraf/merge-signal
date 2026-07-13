@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.domain.pull_request import (
     ChangedFile,
+    CheckRunRecord,
     CiCompleteness,
     CiState,
     CiVisibility,
@@ -172,6 +173,41 @@ def failing_vercel_ci() -> PullRequestCi:
     )
 
 
+def two_failing_ci_surfaces() -> PullRequestCi:
+    return aggregate_ci_state(
+        [
+            CheckRunRecord(
+                id=7,
+                name="Static checks",
+                status="completed",
+                conclusion="failure",
+                provider_name="GitHub Actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/octocat/Hello-World/actions/runs/1/job/7",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            )
+        ],
+        [
+            CommitStatusRecord(
+                id=1,
+                context="Vercel",
+                state="failure",
+                description="Authorization required to deploy.",
+                target_url="https://vercel.com/git/authorize?repo=octocat",
+                creator_login="vercel[bot]",
+                created_at=BASE_TIME,
+                updated_at=BASE_TIME,
+            )
+        ],
+        check_runs_complete=True,
+        commit_statuses_complete=True,
+        check_run_pages_fetched=1,
+        commit_status_pages_fetched=1,
+        total_check_runs=1,
+    )
+
+
 def test_briefing_identifies_specific_blocking_ci_surface_and_safe_link() -> None:
     result = snapshot([changed_file("backend/app/main.py")], ci=failing_vercel_ci())
     briefing = result.review_briefing
@@ -181,8 +217,20 @@ def test_briefing_identifies_specific_blocking_ci_surface_and_safe_link() -> Non
     assert briefing.primary_reason is not None
     assert briefing.primary_reason.url == "https://vercel.com/git/authorize?repo=octocat"
     assert briefing.review_focus[0].title == "Inspect failed Vercel authorization/configuration check"
-    assert "ci:commit_status:Vercel:Vercel" in briefing.provenance.ci_item_ids
+    assert any(id.startswith("ci:commit_status:vercel:vercel:") for id in briefing.provenance.ci_item_ids)
     assert result.merge_readiness.decision.value == "blocked"
+    assert [item.title for item in briefing.review_focus].count("Inspect failed Vercel authorization/configuration check") == 1
+    assert "CI reports a failing state" not in [item.title for item in briefing.review_focus]
+    assert "Inspect failing CI" not in [step.title for step in briefing.recommended_steps]
+    assert sum("CI" in item or "ci" in item.casefold() or "Vercel" in item for item in briefing.checklist) == 1
+
+
+def test_distinct_ci_failures_remain_distinct_in_briefing() -> None:
+    result = snapshot([changed_file("backend/app/main.py")], ci=two_failing_ci_surfaces())
+    titles = [item.title for item in result.review_briefing.review_focus]
+
+    assert "Inspect failed Vercel authorization/configuration check" in titles
+    assert "Inspect failed GitHub Actions check" in titles
 
 
 def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:
@@ -211,6 +259,29 @@ def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified
     assert "review-thread-903" not in briefing.provenance.review_thread_ids
 
 
+def test_author_described_change_produces_verification_step_without_resolution_claim() -> None:
+    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    review_context = build_review_context(
+        [review_record("reviewer", ReviewState.COMMENTED)],
+        [
+            review_comment(904, "reviewer", "Please preserve status while switching tabs.", path=path),
+            review_comment(905, "octocat", "Both links now include the active status.", path=path, in_reply_to_id=904, created_at=BASE_TIME.replace(minute=1)),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    result = snapshot([changed_file(path, additions=220, deletions=159)], review_context=review_context)
+    briefing_text = " ".join([*(item.description for item in result.review_briefing.review_focus), *(step.description for step in result.review_briefing.recommended_steps)])
+
+    assert any(step.title == "Verify the author response" for step in result.review_briefing.recommended_steps)
+    assert "verified fix" not in briefing_text.casefold()
+    assert "reviewer verification is still needed" in briefing_text.casefold()
+
+
 def test_briefing_limits_items_deduplicates_and_keeps_current_snapshot_provenance() -> None:
     files = [changed_file(f"backend/app/file_{index}.py", additions=100, deletions=20) for index in range(6)]
     signals = [high_signal(file.filename, f"sig-{index}") for index, file in enumerate(files)]
@@ -220,7 +291,7 @@ def test_briefing_limits_items_deduplicates_and_keeps_current_snapshot_provenanc
     assert len(briefing.review_focus) <= 3
     assert len(briefing.priority_files) <= 3
     assert len(briefing.recommended_steps) <= 5
-    assert len(briefing.checklist) <= 8
+    assert len(briefing.checklist) <= 5
     assert set(briefing.provenance.file_paths) <= {file.filename for file in files}
     assert all("not-a-real-secret-fixture" not in item for item in briefing.checklist)
 

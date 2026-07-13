@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
-import { safeHttpUrl } from "../../utils/report.js";
+import { ciItemDisplayParts, providerDisplayName, reviewCountLabel, safeHttpUrl } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { ScoreBreakdown } from "./ScoreBreakdown.jsx";
 
@@ -145,8 +145,9 @@ function ReviewContextSummary({ snapshot }) {
   const facts = [
     pluralFact(concern.needing_attention_count, "review conversation needs attention", "review conversations need attention"),
     pluralFact(concern.active_latest_change_request_count, "reviewer currently requests changes", "reviewers currently request changes"),
+    pluralFact(concern.author_described_changes_count, "author response needs verification", "author responses need verification"),
     pluralFact(concern.author_claimed_addressed_count, "author-said-addressed concern", "author-said-addressed concerns"),
-    pluralFact(context.thread_count && !concern.needing_attention_count, "inline conversation", "inline conversations"),
+    !concern.needing_attention_count && reviewCountLabel(context.thread_count, context.visibility === "unavailable"),
   ].filter(Boolean);
   return (
     <section className="review-context-summary" aria-label="Review context summary">
@@ -188,7 +189,7 @@ function summarizeReason(reason, snapshot) {
 function ciBlockerText(snapshot) {
   const blocker = snapshot.ci_explanation?.blocking_items?.[0];
   if (!blocker) return null;
-  const provider = blocker.provider || blocker.name;
+  const provider = providerDisplayName(blocker.provider || blocker.name);
   return `${provider} ${categoryLabel(blocker.category)} check is failing`;
 }
 
@@ -225,7 +226,7 @@ function CiSurfacePanel({ snapshot }) {
             {explanation.surfaces.map((surface) => (
               <div className="ci-surface-group" key={`${surface.source_type}-${surface.provider}`}>
                 <div className="ci-surface-group__heading">
-                  <strong>{surface.provider}</strong>
+                  <strong>{providerDisplayName(surface.provider)}</strong>
                   <span>{titleCase(surface.source_type.replaceAll("_", " "))}</span>
                 </div>
                 <div className="ci-surface-items">
@@ -253,11 +254,12 @@ function CiCount({ label, value, tone }) {
 
 function CiItem({ item, compact = false }) {
   const url = safeHttpUrl(item.details_url);
+  const display = ciItemDisplayParts(item);
   return (
     <article className={compact ? "ci-item ci-item--compact" : "ci-item"}>
       <div>
-        <strong>{item.provider}</strong>
-        <span>{item.name}</span>
+        <strong>{display.provider}</strong>
+        {display.name && <span>{display.name}</span>}
       </div>
       <div className="ci-item__meta">
         <Badge tone={toneForLevel(item.normalized_state)}>{titleCase(item.normalized_state)}</Badge>

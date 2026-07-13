@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 from app.domain.file_classification import ChangeMagnitude, FileKind
 from app.domain.file_priority import FilePriorityFactor, FilePriorityLevel, FilePrioritySummary, RankedFile
 from app.domain.pull_request import ChangedFile, PullRequestSnapshot, ReviewConcernAttentionState, ReviewThreadRecord
@@ -15,6 +13,7 @@ from app.file_priority.rules import (
     SIGNAL_PRIORITY_WEIGHT_BY_RULE_ID,
 )
 from app.file_priority.summary import summarize_file_priorities
+from app.services.file_signal_association import normalize_repo_path, signals_for_changed_file
 
 FILE_LIMITATIONS = [
     "Review priority is a deterministic review-ordering heuristic, not a probability or defect score.",
@@ -38,10 +37,9 @@ def level_for_file_priority(score: int) -> FilePriorityLevel:
 
 
 def calculate_file_priorities(snapshot: PullRequestSnapshot) -> tuple[list[RankedFile], FilePrioritySummary]:
-    signals_by_file = _signals_by_file(snapshot.signals)
     threads_by_file = _threads_by_file(snapshot.review_context.threads)
     unranked = [
-        _ranked_file_without_rank(file, signals_by_file.get(file.filename, []), threads_by_file.get(file.filename, []))
+        _ranked_file_without_rank(file, signals_for_changed_file(file, snapshot.signals), threads_by_file.get(normalize_repo_path(file.filename), []))
         for file in snapshot.files
     ]
     ordered = sorted(
@@ -89,7 +87,7 @@ def _ranked_file_without_rank(file: ChangedFile, signals: list[ReviewSignal], th
         changes=_file_changes(file),
         additions=max(file.additions, 0),
         deletions=max(file.deletions, 0),
-        related_signal_ids=unique_sorted([signal.id for signal in signals if signal.rule_id in SIGNAL_PRIORITY_WEIGHT_BY_RULE_ID]),
+        related_signal_ids=unique_sorted([signal.id for signal in signals]),
         factors=sorted(factors, key=lambda factor: (FACTOR_GROUP_ORDER.index(factor.category), factor.id, factor.observed_value or "")),
         limitations=FILE_LIMITATIONS,
     )
@@ -400,22 +398,11 @@ def _apply_group_caps(factors: list[FilePriorityFactor]) -> list[FilePriorityFac
     return applied
 
 
-def _signals_by_file(signals: list[ReviewSignal]) -> dict[str, list[ReviewSignal]]:
-    grouped: dict[str, list[ReviewSignal]] = defaultdict(list)
-    for signal in signals:
-        for path in unique_sorted(signal.affected_files):
-            grouped[path].append(signal)
-    return {
-        path: sorted(items, key=lambda signal: (signal.rule_id, signal.id))
-        for path, items in sorted(grouped.items(), key=lambda item: (item[0].casefold(), item[0]))
-    }
-
-
 def _threads_by_file(threads: list[ReviewThreadRecord]) -> dict[str, list[ReviewThreadRecord]]:
-    grouped: dict[str, list[ReviewThreadRecord]] = defaultdict(list)
+    grouped: dict[str, list[ReviewThreadRecord]] = {}
     for thread in threads:
         if thread.path:
-            grouped[thread.path].append(thread)
+            grouped.setdefault(normalize_repo_path(thread.path), []).append(thread)
     return {
         path: sorted(items, key=lambda thread: (thread.root_comment.created_at, thread.root_comment_id))
         for path, items in sorted(grouped.items(), key=lambda item: (item[0].casefold(), item[0]))

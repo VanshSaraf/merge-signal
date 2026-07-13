@@ -10,6 +10,7 @@ export function OverviewSection({ snapshot }) {
     <div className="report-section">
       <ReadinessStatement snapshot={snapshot} />
       <ReviewNext snapshot={snapshot} />
+      <ReviewContextSummary snapshot={snapshot} />
       <CiSurfacePanel snapshot={snapshot} />
       <AssessmentRow snapshot={snapshot} />
       <MetricGrid snapshot={snapshot} />
@@ -23,6 +24,28 @@ export function OverviewSection({ snapshot }) {
       </div>
     </div>
   );
+}
+
+function ReviewContextSummary({ snapshot }) {
+  const context = snapshot.review_context;
+  if (!context || (!context.review_count && !context.thread_count && context.visibility === "complete")) return null;
+  const facts = [
+    pluralFact(context.approved_count, "approval", "approvals"),
+    pluralFact(context.changes_requested_count, "change request", "change requests"),
+    pluralFact(context.thread_count, "inline conversation", "inline conversations"),
+  ].filter(Boolean);
+  return (
+    <section className="review-context-summary" aria-label="Review context summary">
+      <p className="eyebrow">Reviews</p>
+      <h2>{facts.length ? facts.join(" · ") : `Review context ${context.visibility ?? "available"}`}</h2>
+      <p>Observable GitHub review state only; resolution is not inferred yet.</p>
+    </section>
+  );
+}
+
+function pluralFact(count, singular, plural) {
+  if (!count) return null;
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function ReadinessStatement({ snapshot }) {

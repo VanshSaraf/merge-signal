@@ -19,7 +19,10 @@ from app.domain.pull_request import (
     PullRequestCi,
     PullRequestMetadata,
     PullRequestReference,
+    PullRequestReviewRecord,
     PullRequestSnapshot,
+    ReviewCommentRecord,
+    ReviewContext,
     SnapshotCompleteness,
 )
 from app.errors import (
@@ -39,6 +42,8 @@ from app.integrations.github.models import (
     GitHubPullRequest,
     GitHubPullRequestCommit,
     GitHubPullRequestFile,
+    GitHubPullRequestReview,
+    GitHubPullRequestReviewComment,
 )
 from app.integrations.github.pagination import parse_next_link
 from app.file_priority import calculate_file_priorities
@@ -48,6 +53,12 @@ from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.ci_explanation import build_ci_explanation
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
+from app.services.review_context import (
+    build_review_context,
+    normalize_review_state,
+    safe_github_url,
+    sanitize_review_body,
+)
 from app.signals.engine import analyze_snapshot_signals
 
 SleepCallable = Callable[[float], Awaitable[None]]
@@ -149,6 +160,78 @@ class GitHubRestClient:
             pages_fetched,
         )
 
+    async def list_pull_request_reviews(
+        self,
+        reference: PullRequestReference,
+    ) -> tuple[list[PullRequestReviewRecord], int]:
+        path = self._repo_path(reference, "pulls", str(reference.pull_number), "reviews")
+        items, pages_fetched = await self._request_paginated_with_pages(path)
+        return (
+            [
+                self._normalize_review(self._validate_payload(item, GitHubPullRequestReview))
+                for item in items
+            ],
+            pages_fetched,
+        )
+
+    async def list_pull_request_review_comments(
+        self,
+        reference: PullRequestReference,
+    ) -> tuple[list[ReviewCommentRecord], int]:
+        path = self._repo_path(reference, "pulls", str(reference.pull_number), "comments")
+        items, pages_fetched = await self._request_paginated_with_pages(path)
+        return (
+            [
+                self._normalize_review_comment(self._validate_payload(item, GitHubPullRequestReviewComment))
+                for item in items
+            ],
+            pages_fetched,
+        )
+
+    async def get_pull_request_review_context(
+        self,
+        reference: PullRequestReference,
+    ) -> ReviewContext:
+        warnings: list[str] = []
+        reviews: list[PullRequestReviewRecord] = []
+        comments: list[ReviewCommentRecord] = []
+        review_pages_fetched = 0
+        comment_pages_fetched = 0
+        reviews_complete = True
+        comments_complete = True
+
+        try:
+            reviews, review_pages_fetched = await self.list_pull_request_reviews(reference)
+        except (
+            GitHubAccessDeniedError,
+            GitHubUnavailableError,
+            GitHubInvalidResponseError,
+            GitHubPaginationLimitExceededError,
+        ):
+            reviews_complete = False
+            warnings.append("Pull-request reviews could not be retrieved from GitHub.")
+
+        try:
+            comments, comment_pages_fetched = await self.list_pull_request_review_comments(reference)
+        except (
+            GitHubAccessDeniedError,
+            GitHubUnavailableError,
+            GitHubInvalidResponseError,
+            GitHubPaginationLimitExceededError,
+        ):
+            comments_complete = False
+            warnings.append("Inline review comments could not be retrieved from GitHub.")
+
+        return build_review_context(
+            reviews,
+            comments,
+            reviews_complete=reviews_complete,
+            comments_complete=comments_complete,
+            review_pages_fetched=review_pages_fetched,
+            comment_pages_fetched=comment_pages_fetched,
+            warnings=warnings,
+        )
+
     async def get_pull_request_ci(
         self,
         reference: PullRequestReference,
@@ -213,6 +296,7 @@ class GitHubRestClient:
         commits = await self.list_pull_request_commits(reference)
         ci = await self.get_pull_request_ci(reference, metadata.head_sha)
         ci_explanation = build_ci_explanation(ci)
+        review_context = await self.get_pull_request_review_context(reference)
         completeness = self._build_completeness(metadata, files, commits)
 
         snapshot = PullRequestSnapshot(
@@ -222,6 +306,7 @@ class GitHubRestClient:
             commits=commits,
             ci=ci,
             ci_explanation=ci_explanation,
+            review_context=review_context,
             classification_summary=classification_summary,
             completeness=completeness,
             fetched_at=datetime.now(UTC),
@@ -522,6 +607,35 @@ class GitHubRestClient:
             creator_login=upstream.creator.login if upstream.creator else None,
             created_at=upstream.created_at,
             updated_at=upstream.updated_at,
+        )
+
+    def _normalize_review(self, upstream: GitHubPullRequestReview) -> PullRequestReviewRecord:
+        return PullRequestReviewRecord(
+            id=upstream.id,
+            reviewer_login=upstream.user.login if upstream.user else "unknown",
+            state=normalize_review_state(upstream.state),
+            submitted_at=upstream.submitted_at,
+            body_excerpt=sanitize_review_body(upstream.body),
+            html_url=safe_github_url(upstream.html_url),
+            commit_sha=upstream.commit_id,
+        )
+
+    def _normalize_review_comment(self, upstream: GitHubPullRequestReviewComment) -> ReviewCommentRecord:
+        return ReviewCommentRecord(
+            id=upstream.id,
+            reviewer_login=upstream.user.login if upstream.user else "unknown",
+            body_excerpt=sanitize_review_body(upstream.body) or "",
+            created_at=upstream.created_at,
+            updated_at=upstream.updated_at,
+            html_url=safe_github_url(upstream.html_url),
+            pull_request_review_id=upstream.pull_request_review_id,
+            in_reply_to_id=upstream.in_reply_to_id,
+            path=upstream.path,
+            line=upstream.line,
+            start_line=upstream.start_line,
+            side=upstream.side,
+            start_side=upstream.start_side,
+            commit_sha=upstream.commit_id,
         )
 
     def _build_completeness(

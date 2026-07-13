@@ -13,7 +13,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/api/health.py` owns the health endpoint.
 - `app/api/v1/` owns versioned API routes.
 - `app/domain/` contains domain models that do not depend on FastAPI route code.
-- `app/services/` contains application services such as PR URL parsing, CI aggregation, and file classification.
+- `app/services/` contains application services such as PR URL parsing, CI aggregation, file classification, CI explanation, and review-context construction.
 - `app/signals/` contains deterministic review-signal rules, patch scanning, aggregation, and summary generation.
 - `app/scoring/` contains deterministic merge-risk and evidence-confidence engines, rule weights, group caps, thresholds, and ordering helpers.
 - `app/readiness/` contains deterministic merge-readiness rule metadata, precedence, suppression, and evaluation.
@@ -40,6 +40,8 @@ HTTP request
 -> current head SHA from pull-request metadata
 -> check-run and commit-status retrieval for that head SHA
 -> structured CI explanation for observed surfaces
+-> submitted review and inline review-comment retrieval
+-> deterministic review-context thread construction
 -> deterministic review-signal engine
 -> signal aggregation and summary generation
 -> merge-risk engine
@@ -53,7 +55,7 @@ HTTP request
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, approval state, CODEOWNERS results, repository policy results, generated patches, or merge commands.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, observable review context, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, CODEOWNERS results, repository policy results, generated patches, merge commands, or review-thread resolution claims.
 
 ## File Classification Service
 
@@ -130,6 +132,8 @@ CI retrieval uses only `metadata.head_sha`. Check runs are fetched from the comm
 
 The CI aggregation service lives outside FastAPI. It reduces check-run outcomes and current commit-status contexts into state and visibility values without making merge-readiness claims. A separate CI explanation service converts those already-fetched records into grouped surfaces, item-level normalized states, deterministic categories, blocking items, and safe HTTPS details links. Partial CI-only failures can produce a successful snapshot with warnings, while authentication and rate-limit failures remain global errors.
 
+Review-context retrieval uses the same GitHub REST client and bounded pagination controls to collect pull-request reviews and inline review comments. The review-context service groups inline comments into deterministic root/reply conversations, preserves orphan replies with warnings, sanitizes user-generated text, computes latest observable reviewer states, and exposes only safe GitHub links. It does not infer resolution, staleness, concern lifecycle, or reviewer policy effects.
+
 Pagination is centralized in `app/integrations/github/pagination.py`. Only safe `rel="next"` links on the configured API host are followed, repeated links are rejected, and `GITHUB_MAX_PAGES` bounds the flow.
 
 Retries are limited to HTTPX transport errors, timeouts, and transient `502`/`503`/`504` responses. Authentication, authorization, not-found, rate-limit, and schema errors are not retried.
@@ -176,7 +180,7 @@ The frontend is a Vite React application under `frontend/src`.
 - `test/` contains test setup.
 - `utils/` contains formatting and status helpers.
 
-React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, files, signals, actions, and evidence. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
+React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, files, reviews, signals, actions, and evidence. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
 
 ## Configuration
 

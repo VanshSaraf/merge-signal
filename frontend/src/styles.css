@@ -1304,6 +1304,70 @@ input:disabled {
   gap: var(--space-2);
 }
 
+.review-context-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.review-context-summary h2 {
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  margin: 0;
+}
+
+.review-context-summary p:last-child {
+  color: var(--text-3);
+  margin: 0;
+}
+
+.review-summary-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+
+.latest-reviewer-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.reviewer-state {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.review-thread-row h3 {
+  font-size: 0.98rem;
+}
+
+.review-comment {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.review-comment p {
+  white-space: pre-wrap;
+}
+
+.review-comment small {
+  color: var(--text-3);
+}
+
 .assessment-tile {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent-soft)), var(--surface));
@@ -1835,6 +1899,7 @@ code {
   .analysis-command--compact,
   .assessment-row,
   .ci-surface-counts,
+  .review-summary-grid,
   .metric-grid,
   .breakdown-grid,
   .skeleton-grid {
@@ -1900,6 +1965,7 @@ code {
   .filter-grid,
   .review-next,
   .ci-item--compact,
+  .review-summary-grid,
   .detail-grid,
   .pull-meta,
   .skeleton-grid,

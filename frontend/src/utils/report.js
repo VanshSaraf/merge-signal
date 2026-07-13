@@ -3,6 +3,7 @@ import { titleCase } from "./formatting.js";
 export const reportSections = [
   { id: "overview", label: "Overview" },
   { id: "files", label: "Files" },
+  { id: "reviews", label: "Reviews" },
   { id: "signals", label: "Signals" },
   { id: "actions", label: "Actions" },
   { id: "evidence", label: "Evidence" },

@@ -6,6 +6,7 @@ import { ActionsSection } from "../report/ActionsSection.jsx";
 import { EvidenceSection } from "../report/EvidenceSection.jsx";
 import { FilesSection } from "../report/FilesSection.jsx";
 import { OverviewSection } from "../report/OverviewSection.jsx";
+import { ReviewsSection } from "../report/ReviewsSection.jsx";
 import { SignalsSection } from "../report/SignalsSection.jsx";
 
 export function AnalysisDashboard({ snapshot }) {
@@ -26,6 +27,7 @@ export function AnalysisDashboard({ snapshot }) {
               resetFilters={filters.resetFileFilters}
             />
           )}
+          {activeSection === "reviews" && <ReviewsSection reviewContext={snapshot.review_context} />}
           {activeSection === "signals" && (
             <SignalsSection
               signals={snapshot.signals ?? []}

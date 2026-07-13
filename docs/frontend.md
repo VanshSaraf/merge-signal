@@ -13,7 +13,7 @@ The page is organized around focused modules:
 - `src/components/layout/`: application header and pull-request report shell.
 - `src/components/landing/`: landing hero, command-style PR input, evidence pipeline schematic, capability overview, and trust boundaries.
 - `src/components/analysis/`: loading state and the analysis dashboard shell.
-- `src/components/report/`: report navigation, overview, ranked files, review signals, review actions, evidence, filters, score breakdowns, and file detail drawer.
+- `src/components/report/`: report navigation, overview, ranked files, review conversations, review signals, review actions, evidence, filters, score breakdowns, and file detail drawer.
 - `src/components/common/`: reusable card, badge, skeleton, and error components.
 - `src/hooks/useReportFilters.js`: derived client-side filtering and sorting for the existing snapshot payload.
 - `src/utils/`: formatting, status-tone, and report helper utilities.
@@ -82,16 +82,18 @@ The current UI is a detailed snapshot report. It shows:
 - readiness, risk, confidence, and CI status
 - compact CI surface intelligence with passing, failing, pending, and unknown counts
 - expandable CI surface details with safe direct links when GitHub exposes HTTPS provider URLs
+- observable review-state summary and inline review conversations
 - summary metrics
 - merge-risk group and evidence-confidence score breakdowns
 - all ranked files with priority, kind, area, status, search, sorting, and a detail drawer
+- all review conversations with sanitized bounded text, ordered replies, participant names, safe GitHub links, and hidden technical IDs
 - all review signals with severity, category, affected files, collapsible evidence, collapsible limitations, and rule IDs
 - all review actions with priority, category, affected files, related signals, related readiness rules, evidence, limitations, and rule IDs
 - readiness reasons, risk contributions, confidence components, completeness, CI, classification summary, and deduplicated limitations
 
 The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. The file detail drawer shows classification evidence, previous-path classification for renames when available, priority factors, related signal IDs, and limitations; it does not show raw patches.
 
-It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, PR comments, generated fixes, or GitHub publishing.
+It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, review-thread resolution detection, generated fixes, or GitHub publishing.
 
 ## Accessibility And Responsiveness
 

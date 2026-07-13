@@ -314,6 +314,21 @@ class CiVisibility(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class ReviewContextVisibility(StrEnum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+
+
+class ReviewState(StrEnum):
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    COMMENTED = "commented"
+    DISMISSED = "dismissed"
+    PENDING = "pending"
+    UNKNOWN = "unknown"
+
+
 class CiSurfaceType(StrEnum):
     CHECK_RUN = "check_run"
     COMMIT_STATUS = "commit_status"
@@ -440,6 +455,111 @@ def empty_ci_explanation() -> CiExplanation:
     )
 
 
+class ReviewContextCompleteness(StrictDomainModel):
+    reviews_complete: bool = Field(description="Whether pull-request review retrieval completed.")
+    comments_complete: bool = Field(description="Whether inline review-comment retrieval completed.")
+    review_pages_fetched: int = Field(description="Pull-request review pages fetched.")
+    comment_pages_fetched: int = Field(description="Inline review-comment pages fetched.")
+    warnings: list[str] = Field(description="Review-context completeness warnings.")
+
+
+class PullRequestReviewRecord(StrictDomainModel):
+    id: int = Field(description="GitHub pull-request review identifier.")
+    reviewer_login: str = Field(description="Reviewer login.")
+    state: ReviewState = Field(description="Observable GitHub review state.")
+    submitted_at: datetime | None = Field(description="Review submission timestamp when available.")
+    body_excerpt: str | None = Field(description="Sanitized bounded review body excerpt.")
+    html_url: str | None = Field(description="Safe GitHub review URL when available.")
+    commit_sha: str | None = Field(description="Commit SHA associated with the review when available.")
+
+
+class ReviewCommentRecord(StrictDomainModel):
+    id: int = Field(description="GitHub inline review-comment identifier.")
+    reviewer_login: str = Field(description="Comment author login.")
+    body_excerpt: str = Field(description="Sanitized bounded inline comment text.")
+    created_at: datetime = Field(description="Comment creation timestamp.")
+    updated_at: datetime | None = Field(description="Comment update timestamp when available.")
+    html_url: str | None = Field(description="Safe GitHub comment URL when available.")
+    pull_request_review_id: int | None = Field(description="Associated pull-request review identifier when available.")
+    in_reply_to_id: int | None = Field(description="Root comment identifier when this comment is a reply.")
+    path: str | None = Field(description="Affected file path when available.")
+    line: int | None = Field(description="Current line when directly observable.")
+    start_line: int | None = Field(description="Current start line when directly observable.")
+    side: str | None = Field(description="Current diff side when directly observable.")
+    start_side: str | None = Field(description="Current start side when directly observable.")
+    commit_sha: str | None = Field(description="Commit SHA associated with the comment when available.")
+
+
+class ReviewThreadRecord(StrictDomainModel):
+    id: str = Field(description="Deterministic MergeSignal review-thread identifier.")
+    root_comment_id: int = Field(description="Root GitHub comment identifier.")
+    path: str | None = Field(description="Affected file path when available.")
+    line: int | None = Field(description="Current line when directly observable.")
+    start_line: int | None = Field(description="Current start line when directly observable.")
+    side: str | None = Field(description="Current diff side when directly observable.")
+    start_side: str | None = Field(description="Current start side when directly observable.")
+    root_comment: ReviewCommentRecord = Field(description="Root inline comment.")
+    replies: list[ReviewCommentRecord] = Field(description="Replies ordered deterministically.")
+    participant_logins: list[str] = Field(description="Unique participant logins in deterministic order.")
+    html_url: str | None = Field(description="Safe GitHub URL for the conversation root when available.")
+    is_orphan_reply: bool = Field(description="Whether this thread was created from a reply whose root was unavailable.")
+
+
+class ReviewerLatestState(StrictDomainModel):
+    reviewer_login: str = Field(description="Reviewer login.")
+    state: ReviewState = Field(description="Latest observable review state for this reviewer.")
+    review_id: int = Field(description="Review identifier that produced the latest observable state.")
+    submitted_at: datetime | None = Field(description="Submission timestamp for the latest state when available.")
+
+
+class ReviewContext(StrictDomainModel):
+    visibility: ReviewContextVisibility = Field(description="Review-context visibility.")
+    completeness: ReviewContextCompleteness = Field(description="Review-context completeness details.")
+    review_count: int = Field(description="Submitted or observable pull-request review count.")
+    comment_count: int = Field(description="Inline review-comment count.")
+    thread_count: int = Field(description="Constructed inline conversation count.")
+    approved_count: int = Field(description="Observable approved review count.")
+    changes_requested_count: int = Field(description="Observable changes-requested review count.")
+    commented_count: int = Field(description="Observable commented review count.")
+    dismissed_count: int = Field(description="Observable dismissed review count.")
+    pending_count: int = Field(description="Observable pending review count.")
+    reviews: list[PullRequestReviewRecord] = Field(description="Observable pull-request reviews.")
+    latest_reviewer_states: list[ReviewerLatestState] = Field(description="Latest observable state per reviewer.")
+    threads: list[ReviewThreadRecord] = Field(description="Deterministic inline review conversations.")
+    warnings: list[str] = Field(description="Review-context warnings.")
+    limitations: list[str] = Field(description="Review-context limitations.")
+
+
+def empty_review_context() -> ReviewContext:
+    return ReviewContext(
+        visibility=ReviewContextVisibility.COMPLETE,
+        completeness=ReviewContextCompleteness(
+            reviews_complete=True,
+            comments_complete=True,
+            review_pages_fetched=0,
+            comment_pages_fetched=0,
+            warnings=[],
+        ),
+        review_count=0,
+        comment_count=0,
+        thread_count=0,
+        approved_count=0,
+        changes_requested_count=0,
+        commented_count=0,
+        dismissed_count=0,
+        pending_count=0,
+        reviews=[],
+        latest_reviewer_states=[],
+        threads=[],
+        warnings=[],
+        limitations=[
+            "Review context reports observable GitHub review state only.",
+            "MergeSignal does not determine whether review concerns are resolved in this milestone.",
+            "Review comments do not automatically change merge risk or readiness.",
+        ],
+    )
+
+
 class SnapshotCompleteness(StrictDomainModel):
     files_complete: bool = Field(description="Whether changed-file retrieval is complete.")
     commits_complete: bool = Field(description="Whether commit retrieval is complete.")
@@ -456,6 +576,10 @@ class PullRequestSnapshot(StrictDomainModel):
     ci_explanation: CiExplanation = Field(
         default_factory=empty_ci_explanation,
         description="Structured explanation of observed CI surfaces and blocking items.",
+    )
+    review_context: ReviewContext = Field(
+        default_factory=empty_review_context,
+        description="Observable pull-request reviews and inline review conversations.",
     )
     classification_summary: FileClassificationSummary = Field(
         description="Pull-request-level summary of changed-file classifications."

@@ -197,6 +197,83 @@ def test_list_pull_request_commits_paginates_and_preserves_order() -> None:
     run(client.aclose())
 
 
+def test_list_pull_request_reviews_and_comments_normalizes_safely() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/reviews"):
+            return json_response(
+                200,
+                [
+                    {
+                        "id": 501,
+                        "user": {"login": "reviewer"},
+                        "state": "CHANGES_REQUESTED",
+                        "body": "Please avoid password=hunter2 here.",
+                        "html_url": "https://github.com/octocat/Hello-World/pull/42#pullrequestreview-501",
+                        "commit_id": "head",
+                        "submitted_at": "2026-07-13T10:00:00Z",
+                    }
+                ],
+            )
+        if request.url.path.endswith("/comments"):
+            return json_response(
+                200,
+                [
+                    {
+                        "id": 601,
+                        "pull_request_review_id": 501,
+                        "user": {"login": "reviewer"},
+                        "body": "<b>Concern</b> about api_key=abc123",
+                        "path": "backend/app/main.py",
+                        "line": 12,
+                        "side": "RIGHT",
+                        "diff_hunk": "@@ raw patch must not leak",
+                        "html_url": "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+                        "commit_id": "head",
+                        "created_at": "2026-07-13T10:01:00Z",
+                        "updated_at": "2026-07-13T10:02:00Z",
+                    }
+                ],
+            )
+        return json_response(404, {"message": "unexpected"})
+
+    client = make_client(httpx.MockTransport(handler))
+    reviews = run(client.list_pull_request_reviews(reference()))[0]
+    comments = run(client.list_pull_request_review_comments(reference()))[0]
+
+    assert reviews[0].state.value == "changes_requested"
+    assert "hunter2" not in (reviews[0].body_excerpt or "")
+    assert comments[0].path == "backend/app/main.py"
+    assert "@@ raw patch" not in comments[0].model_dump_json()
+    assert "abc123" not in comments[0].body_excerpt
+    run(client.aclose())
+
+
+def test_review_context_partial_when_comments_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/reviews"):
+            return json_response(200, [])
+        if request.url.path.endswith("/comments"):
+            return json_response(403, {"message": "forbidden"})
+        if request.url.path.endswith("/files"):
+            return json_response(200, load_fixture("pull_request_files_page_1.json") + load_fixture("pull_request_files_page_2.json"))
+        if request.url.path.endswith("/commits"):
+            return json_response(200, load_fixture("pull_request_commits_page_1.json") + load_fixture("pull_request_commits_page_2.json"))
+        if request.url.path.endswith("/check-runs"):
+            return json_response(200, {"total_count": 0, "check_runs": []})
+        if request.url.path.endswith("/statuses/head-sha"):
+            return json_response(200, [])
+        return json_response(200, load_fixture("pull_request.json"))
+
+    client = make_client(httpx.MockTransport(handler))
+    snapshot = run(client.get_pull_request_snapshot(reference()))
+
+    assert snapshot.review_context.visibility.value == "partial"
+    assert snapshot.review_context.completeness.reviews_complete is True
+    assert snapshot.review_context.completeness.comments_complete is False
+    assert snapshot.review_context.warnings == ["Inline review comments could not be retrieved from GitHub."]
+    run(client.aclose())
+
+
 def test_snapshot_completeness_and_latest_rate_limit() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         headers = {
@@ -211,6 +288,10 @@ def test_snapshot_completeness_and_latest_rate_limit() -> None:
             return json_response(200, load_fixture("pull_request_files_page_1.json") + load_fixture("pull_request_files_page_2.json"), headers)
         if path.endswith("/commits"):
             return json_response(200, load_fixture("pull_request_commits_page_1.json"), headers)
+        if path.endswith("/reviews") or path.endswith("/comments") or "/statuses/" in path:
+            return json_response(200, [], headers)
+        if path.endswith("/check-runs"):
+            return json_response(200, {"total_count": 0, "check_runs": []}, headers)
         return json_response(200, load_fixture("pull_request.json"), headers)
 
     client = make_client(httpx.MockTransport(handler))

@@ -1,0 +1,157 @@
+import { useState } from "react";
+
+import { Badge } from "../common/Badge.jsx";
+import { Card } from "../common/Card.jsx";
+import { titleCase } from "../../utils/formatting.js";
+import { safeHttpUrl } from "../../utils/report.js";
+import { toneForLevel } from "../../utils/status.js";
+
+export function ReviewsSection({ reviewContext }) {
+  const context = reviewContext ?? {};
+  const threads = context.threads ?? [];
+  const [expandedThreadId, setExpandedThreadId] = useState(null);
+
+  return (
+    <div className="report-section">
+      <Card title="Reviews" eyebrow={titleCase(context.visibility ?? "complete")}>
+        <p className="section-note">Observable GitHub review state only. MergeSignal does not determine whether conversations are resolved yet.</p>
+        <ReviewSummary context={context} />
+        {context.warnings?.length > 0 && <DisclosureList title="Review-context warnings" items={context.warnings} />}
+      </Card>
+
+      <Card title="Inline conversations" eyebrow={`${threads.length} conversations`}>
+        {threads.length === 0 ? (
+          <p className="empty-result">{emptyMessage(context)}</p>
+        ) : (
+          <div className="stack-list report-list review-thread-list">
+            {threads.map((thread) => (
+              <ReviewThreadRow
+                expanded={expandedThreadId === thread.id}
+                key={thread.id}
+                onToggle={() => setExpandedThreadId(expandedThreadId === thread.id ? null : thread.id)}
+                thread={thread}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function ReviewSummary({ context }) {
+  const items = [
+    ["Submitted reviews", context.review_count ?? 0],
+    ["Approvals", context.approved_count ?? 0],
+    ["Change requests", context.changes_requested_count ?? 0],
+    ["Inline conversations", context.thread_count ?? 0],
+  ];
+
+  return (
+    <>
+      <section className="review-summary-grid" aria-label="Observable review-state summary">
+        {items.map(([label, value]) => (
+          <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>
+        ))}
+      </section>
+      {context.latest_reviewer_states?.length > 0 && (
+        <div className="latest-reviewer-states" aria-label="Latest observable reviewer states">
+          {context.latest_reviewer_states.map((item) => (
+            <span className="reviewer-state" key={`${item.reviewer_login}-${item.review_id}`}>
+              <strong>{item.reviewer_login}</strong>
+              <Badge tone={reviewStateTone(item.state)}>{reviewStateLabel(item.state)}</Badge>
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ReviewThreadRow({ thread, expanded, onToggle }) {
+  const root = thread.root_comment ?? {};
+  const replies = thread.replies ?? [];
+  const location = [thread.path, lineLabel(thread)].filter(Boolean).join(":");
+  const githubUrl = safeHttpUrl(thread.html_url);
+
+  return (
+    <article className="report-item review-thread-row">
+      <div className="item-heading">
+        <Badge>{root.reviewer_login ?? "Unknown"}</Badge>
+        {thread.is_orphan_reply && <Badge tone="warning">Orphan reply</Badge>}
+        <span>{replies.length} {replies.length === 1 ? "reply" : "replies"}</span>
+      </div>
+      <h3>{location || "Inline review conversation"}</h3>
+      <p>{root.body_excerpt || "No comment text available."}</p>
+      <button className="button-link action-details-toggle" type="button" onClick={onToggle} aria-expanded={expanded}>
+        {expanded ? "Hide conversation" : "View conversation"}
+      </button>
+      {expanded && (
+        <div className="technical-details">
+          <CommentBlock comment={root} label="Root comment" />
+          {replies.map((reply) => <CommentBlock comment={reply} key={reply.id} label="Reply" />)}
+          {githubUrl && <a className="button button--secondary button--compact" href={githubUrl} target="_blank" rel="noreferrer">Open on GitHub</a>}
+          <DisclosureList title="Participants" items={thread.participant_logins ?? []} />
+          <details className="mini-list">
+            <summary>Technical details</summary>
+            <ul>
+              <li><code>{thread.id}</code></li>
+              <li>Root comment ID: <code>{thread.root_comment_id}</code></li>
+              {root.pull_request_review_id && <li>Review ID: <code>{root.pull_request_review_id}</code></li>}
+            </ul>
+          </details>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function CommentBlock({ comment, label }) {
+  return (
+    <div className="review-comment">
+      <strong>{label} · {comment.reviewer_login ?? "Unknown"}</strong>
+      <p>{comment.body_excerpt || "No comment text available."}</p>
+      <small>{formatTimestamp(comment.created_at)}</small>
+    </div>
+  );
+}
+
+function DisclosureList({ title, items }) {
+  if (!items?.length) return null;
+  return <div className="mini-list"><strong>{title}</strong><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
+}
+
+function lineLabel(thread) {
+  if (thread.start_line && thread.line && thread.start_line !== thread.line) return `${thread.start_line}-${thread.line}`;
+  if (thread.line) return `L${thread.line}`;
+  return null;
+}
+
+function formatTimestamp(value) {
+  if (!value) return "Timestamp unavailable";
+  try {
+    return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function reviewStateLabel(state) {
+  return titleCase(String(state ?? "unknown").replaceAll("_", " "));
+}
+
+function reviewStateTone(state) {
+  return {
+    approved: "success",
+    changes_requested: "danger",
+    commented: "info",
+    dismissed: "warning",
+    pending: "warning",
+  }[state] ?? toneForLevel(state);
+}
+
+function emptyMessage(context) {
+  if (context.visibility === "unavailable") return "Review context was unavailable from GitHub.";
+  if (context.visibility === "partial") return "No inline conversations were available in the retrieved partial review context.";
+  return "No inline review conversations were observed.";
+}

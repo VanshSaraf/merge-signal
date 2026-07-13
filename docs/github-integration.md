@@ -2,7 +2,7 @@
 
 ## Current Capabilities
 
-MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API after a PR URL passes the strict local parser. Changed-file path strings are classified locally after GitHub file data is normalized, deterministic review signals are produced from the completed snapshot, scoring is calculated from in-memory MergeSignal models, merge readiness is calculated from the final normalized snapshot, changed files are ranked by deterministic review priority, and deterministic review actions are built without additional GitHub requests.
+MergeSignal can fetch public GitHub pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API after a PR URL passes the strict local parser. Changed-file path strings are classified locally after GitHub file data is normalized, review conversations are constructed deterministically, deterministic review signals are produced from the completed snapshot, scoring is calculated from in-memory MergeSignal models, merge readiness is calculated from the final normalized snapshot, changed files are ranked by deterministic review priority, and deterministic review actions are built without additional GitHub requests.
 
 Supported input:
 
@@ -10,7 +10,7 @@ Supported input:
 https://github.com/{owner}/{repository}/pull/{pull_number}
 ```
 
-GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, reviewer assignment, generated fixes, and approval-state decisions are not implemented in this milestone.
+GitHub Enterprise, private repositories, CODEOWNERS, policies, required-check inference, reviewer assignment, generated fixes, review-thread resolution detection, and approval-state decisions are not implemented in this milestone.
 
 ## Authentication
 
@@ -38,10 +38,12 @@ The GitHub client sends:
 - `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`
 - `GET /repos/{owner}/{repo}/commits/{head_sha}/check-runs`
 - `GET /repos/{owner}/{repo}/statuses/{head_sha}`
+- `GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
+- `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`
 
 ## Pagination
 
-Changed files, commits, check runs, and commit statuses are fetched with `per_page=GITHUB_PER_PAGE`, starting at page 1. The client follows only safe `rel="next"` links that remain on the configured GitHub API host, rejects repeated next URLs, and enforces `GITHUB_MAX_PAGES`.
+Changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments are fetched with `per_page=GITHUB_PER_PAGE`, starting at page 1. The client follows only safe `rel="next"` links that remain on the configured GitHub API host, rejects repeated next URLs, and enforces `GITHUB_MAX_PAGES`.
 
 Ordering from GitHub is preserved.
 
@@ -89,9 +91,11 @@ Warnings are also added when GitHub reports a changed-file or commit count that 
 
 CI completeness is reported separately. Check-run `total_count` is compared with retrieved check runs, commit statuses are reduced to current unique contexts, and partial access or temporary CI-only failures are represented with warnings.
 
+Review-context completeness is also reported separately. Pull-request reviews and inline review comments each have completion flags, page counts, and warnings. Partial access to one review surface can still produce a successful snapshot with available review context. Inline comment bodies are sanitized and bounded, raw diff hunks are not exposed, and true resolved/unresolved thread state is not inferred from REST data.
+
 ## Security
 
-The client does not clone repositories, execute repository code, install dependencies, follow pagination to unrelated hosts, expose authorization headers, return raw GitHub payloads, publish check runs, update commit statuses, fetch workflow logs, fetch artifacts, or infer branch-protection required checks.
+The client does not clone repositories, execute repository code, install dependencies, follow pagination to unrelated hosts, expose authorization headers, return raw GitHub payloads, publish check runs, update commit statuses, fetch workflow logs, fetch artifacts, return raw review diff hunks, infer review-thread resolution, or infer branch-protection required checks.
 
 ## Testing
 

@@ -42,7 +42,7 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
 
       <div className={["report-console", isOverview ? "report-console--overview" : "report-console--compact"].join(" ")}>
         <div className="report-nav-sticky">
-          <ReportNavigation activeSection={activeSection} onSectionChange={onSectionChange} />
+          <ReportNavigation activeSection={activeSection} onSectionChange={onSectionChange} snapshot={snapshot} />
         </div>
         <div className="report-console__main">
           {!isOverview && <AssessmentSummaryStrip snapshot={snapshot} />}

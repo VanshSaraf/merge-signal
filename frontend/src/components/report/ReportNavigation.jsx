@@ -1,6 +1,6 @@
 import { reportSections } from "../../utils/report.js";
 
-export function ReportNavigation({ activeSection, onSectionChange }) {
+export function ReportNavigation({ activeSection, onSectionChange, snapshot }) {
   function focusTab(sectionId) {
     document.getElementById(`report-tab-${sectionId}`)?.focus();
   }
@@ -38,9 +38,15 @@ export function ReportNavigation({ activeSection, onSectionChange }) {
           tabIndex={activeSection === section.id ? 0 : -1}
           type="button"
         >
-          {section.label}
+          {sectionLabel(section, snapshot)}
         </button>
       ))}
     </nav>
   );
+}
+
+function sectionLabel(section, snapshot) {
+  if (section.id !== "reviews") return section.label;
+  const count = snapshot?.review_context?.thread_count ?? 0;
+  return count > 0 ? `${section.label} (${count})` : section.label;
 }

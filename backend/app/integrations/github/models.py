@@ -121,3 +121,36 @@ class GitHubCommitStatus(GitHubTransportModel):
     created_at: datetime
     updated_at: datetime
     creator: GitHubStatusCreator | None = None
+
+
+class GitHubPullRequestReview(GitHubTransportModel):
+    id: int
+    user: GitHubUser | None = None
+    body: str | None = None
+    state: str
+    html_url: str | None = None
+    commit_id: str | None = None
+    submitted_at: datetime | None = None
+
+
+class GitHubPullRequestReviewComment(GitHubTransportModel):
+    id: int
+    pull_request_review_id: int | None = None
+    in_reply_to_id: int | None = None
+    user: GitHubUser | None = None
+    body: str | None = None
+    path: str | None = None
+    position: int | None = None
+    original_position: int | None = None
+    line: int | None = None
+    original_line: int | None = None
+    start_line: int | None = None
+    original_start_line: int | None = None
+    side: str | None = None
+    start_side: str | None = None
+    diff_hunk: str | None = None
+    html_url: str | None = None
+    commit_id: str | None = None
+    original_commit_id: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None

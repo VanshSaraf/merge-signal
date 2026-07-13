@@ -103,6 +103,82 @@ function snapshotResponse(overrides = {}) {
         },
       ],
     },
+    review_context: {
+      visibility: "complete",
+      completeness: {
+        reviews_complete: true,
+        comments_complete: true,
+        review_pages_fetched: 1,
+        comment_pages_fetched: 1,
+        warnings: [],
+      },
+      review_count: 2,
+      comment_count: 2,
+      thread_count: 1,
+      approved_count: 1,
+      changes_requested_count: 1,
+      commented_count: 0,
+      dismissed_count: 0,
+      pending_count: 0,
+      latest_reviewer_states: [
+        { reviewer_login: "alice", state: "approved", review_id: 501, submitted_at: "2026-07-13T10:00:00Z" },
+        { reviewer_login: "bob", state: "changes_requested", review_id: 502, submitted_at: "2026-07-13T10:05:00Z" },
+      ],
+      reviews: [
+        { id: 501, reviewer_login: "alice", state: "approved", submitted_at: "2026-07-13T10:00:00Z", body_excerpt: "Looks good.", html_url: "https://github.com/octocat/Hello-World/pull/42#pullrequestreview-501", commit_sha: "head" },
+        { id: 502, reviewer_login: "bob", state: "changes_requested", submitted_at: "2026-07-13T10:05:00Z", body_excerpt: "Please adjust the session handling.", html_url: "https://github.com/octocat/Hello-World/pull/42#pullrequestreview-502", commit_sha: "head" },
+      ],
+      threads: [
+        {
+          id: "review-thread-601",
+          root_comment_id: 601,
+          path: "backend/app/security/secrets.py",
+          line: 42,
+          start_line: null,
+          side: "RIGHT",
+          start_side: null,
+          html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+          is_orphan_reply: false,
+          participant_logins: ["bob", "octocat"],
+          root_comment: {
+            id: 601,
+            reviewer_login: "bob",
+            body_excerpt: "Can we avoid storing password=[REDACTED] here?",
+            created_at: "2026-07-13T10:06:00Z",
+            updated_at: "2026-07-13T10:06:00Z",
+            html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+            pull_request_review_id: 502,
+            in_reply_to_id: null,
+            path: "backend/app/security/secrets.py",
+            line: 42,
+            start_line: null,
+            side: "RIGHT",
+            start_side: null,
+            commit_sha: "head",
+          },
+          replies: [
+            {
+              id: 602,
+              reviewer_login: "octocat",
+              body_excerpt: "Good catch, I will revise this.",
+              created_at: "2026-07-13T10:07:00Z",
+              updated_at: "2026-07-13T10:07:00Z",
+              html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r602",
+              pull_request_review_id: 502,
+              in_reply_to_id: 601,
+              path: "backend/app/security/secrets.py",
+              line: 42,
+              start_line: null,
+              side: "RIGHT",
+              start_side: null,
+              commit_sha: "head",
+            },
+          ],
+        },
+      ],
+      warnings: [],
+      limitations: ["Review comments do not automatically change merge risk or readiness."],
+    },
     signal_summary: { total_signals: 2 },
     signals: [
       {
@@ -542,6 +618,35 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
   });
 
+  it("renders review context summary, conversations, safe links, and hidden technical details", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    expect(await screen.findByLabelText("Review context summary")).toHaveTextContent("1 approval");
+    expect(screen.getByLabelText("Review context summary")).toHaveTextContent("1 change request");
+    await user.click(screen.getByRole("tab", { name: "Reviews (1)" }));
+
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Submitted reviews");
+    expect(screen.getByLabelText("Latest observable reviewer states")).toHaveTextContent("alice");
+    expect(screen.getByLabelText("Latest observable reviewer states")).toHaveTextContent("Changes Requested");
+    expect(screen.getByText("backend/app/security/secrets.py:L42")).toBeInTheDocument();
+    expect(screen.getByText("Can we avoid storing password=[REDACTED] here?")).toBeInTheDocument();
+    expect(screen.queryByText("review-thread-601")).not.toBeInTheDocument();
+    expect(screen.queryByText(/hunter2|api_key|<b>/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "View conversation" }));
+    expect(screen.getByText("Good catch, I will revise this.")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open on GitHub" }).some((link) => link.getAttribute("href") === "https://github.com/octocat/Hello-World/pull/42#discussion_r601")).toBe(true);
+    const technicalDetails = screen.getByText("Technical details").closest("details");
+    expect(technicalDetails).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Technical details"));
+    expect(technicalDetails).toHaveAttribute("open");
+    expect(screen.getByText("review-thread-601")).toBeInTheDocument();
+  });
+
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -678,6 +783,17 @@ describe("App", () => {
         },
       ],
       review_action_summary: { total_actions: 1, limitations: [] },
+      review_context: {
+        ...snapshotResponse().review_context,
+        review_count: 0,
+        comment_count: 0,
+        thread_count: 0,
+        approved_count: 0,
+        changes_requested_count: 0,
+        latest_reviewer_states: [],
+        reviews: [],
+        threads: [],
+      },
       ranked_files: [
         {
           rank: 1,
@@ -719,6 +835,9 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "Overview" }));
     expect(screen.getByLabelText("Review focus")).toHaveTextContent("frontend/src/App.jsx");
     expect(screen.getByLabelText("Review focus")).not.toHaveTextContent("backend/app/security/secrets.py");
+    await user.click(screen.getByRole("tab", { name: "Reviews" }));
+    expect(screen.getByText("No inline review conversations were observed.")).toBeInTheDocument();
+    expect(screen.queryByText("backend/app/security/secrets.py:L42")).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Actions" }));
     await waitFor(() => {
       expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();
@@ -742,6 +861,19 @@ describe("App", () => {
         merge_risk: { score: 0, level: "unmapped_level", limitations: [] },
         evidence_confidence: { score: 0, level: "unknown_visibility", components: [], limitations: [] },
         ci: { state: "not_observed", visibility: "unknown" },
+        review_context: {
+          ...snapshotResponse().review_context,
+          visibility: "unavailable",
+          review_count: 0,
+          comment_count: 0,
+          thread_count: 0,
+          approved_count: 0,
+          changes_requested_count: 0,
+          latest_reviewer_states: [],
+          reviews: [],
+          threads: [],
+          warnings: ["Pull-request reviews could not be retrieved from GitHub."],
+        },
       }));
     });
     renderApp();
@@ -757,6 +889,9 @@ describe("App", () => {
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
     expect(screen.getByText("No files match the current filters.")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Reviews" }));
+    expect(screen.getByText("Review context was unavailable from GitHub.")).toBeInTheDocument();
+    expect(screen.getByText("Pull-request reviews could not be retrieved from GitHub.")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Signals" }));
     expect(screen.getByText("No signals match the current filters.")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Actions" }));

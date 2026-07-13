@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, and commit statuses from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, or approval-state decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, review-thread resolution detection, or approval-state decisions.
 
 Request:
 
@@ -206,6 +206,32 @@ Compact success response:
       "surfaces": [],
       "blocking_items": [],
       "warnings": []
+    },
+    "review_context": {
+      "visibility": "complete",
+      "completeness": {
+        "reviews_complete": true,
+        "comments_complete": true,
+        "review_pages_fetched": 1,
+        "comment_pages_fetched": 1,
+        "warnings": []
+      },
+      "review_count": 0,
+      "comment_count": 0,
+      "thread_count": 0,
+      "approved_count": 0,
+      "changes_requested_count": 0,
+      "commented_count": 0,
+      "dismissed_count": 0,
+      "pending_count": 0,
+      "reviews": [],
+      "latest_reviewer_states": [],
+      "threads": [],
+      "warnings": [],
+      "limitations": [
+        "Review context reports observable GitHub review state only.",
+        "MergeSignal does not determine whether review concerns are resolved in this milestone."
+      ]
     },
     "classification_summary": {
       "total_files": 1,
@@ -394,6 +420,14 @@ Each `ci_explanation.surfaces[]` entry groups items by provider and GitHub surfa
 
 When CI is failing, `blocking_items` identifies the exact observed failing surface when available. For example, a Vercel commit status with description `Authorization required to deploy.` is categorized as `authorization_or_configuration`, while passing GitHub Actions check runs remain visible as passed items in their own surface group.
 
+### Review context
+
+`review_context` reports observable GitHub pull-request reviews and inline review conversations. It is additive snapshot context and does not change merge risk or readiness by itself.
+
+Review records expose reviewer login, normalized review state, submitted timestamp, sanitized bounded body excerpt, safe GitHub URL, and commit SHA when available. Inline comments are grouped into deterministic threads using `in_reply_to_id`: root comments start conversations, replies attach to their root, and orphan replies become standalone threads with warnings. Raw diff hunks and patches are not exposed.
+
+Review-context visibility values are `complete`, `partial`, and `unavailable`. Partial or unavailable review context is represented with warnings and limitations. MergeSignal does not determine whether review conversations are resolved, whether an approval is still valid after later commits, or whether a change request has been fixed.
+
 Example:
 
 ```bash
@@ -423,6 +457,8 @@ Snapshot components:
 - `files`: changed files in GitHub order, each with deterministic current-path classification and previous-path classification for renames.
 - `commits`: commits in GitHub order.
 - `ci`: check runs, current commit statuses, aggregate CI state, visibility, counts, warnings, and CI completeness.
+- `ci_explanation`: grouped CI surfaces, item-level states, deterministic categories, blocking items, and safe details links.
+- `review_context`: submitted reviews, latest observable reviewer states, inline review conversations, completeness, warnings, and limitations.
 - `classification_summary`: counts and warnings across changed-file classifications.
 - `signals`: deterministic review signals derived from snapshot data.
 - `signal_summary`: counts and warnings across emitted review signals.

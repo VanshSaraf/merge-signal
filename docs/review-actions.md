@@ -13,6 +13,8 @@ Snapshot responses include:
 
 The Review Briefing may reuse selected actions as recommended steps, but it does not convert every action into a focus item. It may also suppress a generic action step when a more specific briefing step already covers the same CI blocker, review concern, or top-ranked file.
 
+Actionable CI titles and descriptions are generated once from structured CI provider, category, state, check name, blocking status, and safe provider description data. Review Actions and Review Briefing reuse that same wording, so a Vercel authorization failure or GitHub Actions test failure is described consistently across report sections without parsing rendered strings.
+
 ## Priorities And Categories
 
 Priorities are `high`, `medium`, and `low`.
@@ -55,7 +57,8 @@ Credential and security-control actions never include suspected secret values, r
 
 ## Examples
 
-- Failing CI produces `action.inspect_failing_ci` and states that MergeSignal does not infer which checks are required.
+- Failing CI produces `action.inspect_failing_ci` with provider/category-specific wording when structured CI details are available, such as `Inspect failed GitHub Actions test check`; it falls back to `Inspect failed CI check` only when provider and category are unavailable.
+- Pending CI produces provider/category-specific pending-check wording when structured CI details are available.
 - Partial CI visibility produces `action.investigate_ci_visibility` with the observed state and visibility.
 - A credential-like literal signal produces `action.verify_credential_like_literal` without exposing the suspected value.
 - An active latest change request attached to an inline conversation produces `action.review_concern.active_change_request`.

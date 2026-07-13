@@ -293,7 +293,7 @@ def test_equivalent_ci_blockers_collapse_and_preserve_provenance() -> None:
     assert titles.count("Inspect failed GitHub Actions test check") == 1
     assert steps.count("Inspect failed GitHub Actions test check") == 1
     assert len([id for id in briefing.provenance.ci_item_ids if "github actions:test" in id]) == 2
-    assert briefing.review_focus[0].description == "2 test checks require review."
+    assert briefing.review_focus[0].description == "2 test checks require review while failing."
     assert result.merge_risk.score == calculate_merge_risk(result.signals).score
     assert result.merge_readiness.decision.value == "blocked"
     assert result.evidence_confidence.score == 100

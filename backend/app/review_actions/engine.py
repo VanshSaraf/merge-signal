@@ -5,6 +5,7 @@ from app.domain.scoring import ConfidenceComponentStatus
 from app.review_actions.ordering import action_sort_key, unique_file_ordered, unique_sorted
 from app.review_actions.rules import RULE_BY_ID
 from app.review_actions.summary import summarize_review_actions
+from app.services.ci_explanation import actionable_ci_description, actionable_ci_title
 
 CI_VISIBILITY_SIGNAL_RULE_IDS = frozenset({
     "ci.missing",
@@ -97,25 +98,61 @@ def _ci_actions(
     actions: list[ReviewAction] = []
     ci_failing = snapshot.ci.state == CiState.FAILING or "ci.failing" in signals_by_rule or "readiness.blocked.ci_failing" in reasons_by_rule
     if ci_failing:
-        actions.append(
-            _action(
-                "action.inspect_failing_ci",
-                signals_by_rule.get("ci.failing", []),
-                reasons_by_rule.get("readiness.blocked.ci_failing", []),
-                _ci_failure_action_evidence(snapshot),
-                ranked_positions,
+        if snapshot.ci_explanation.blocking_items:
+            for group_key, items in _group_ci_items(snapshot.ci_explanation.blocking_items).items():
+                actions.append(
+                    _action(
+                        "action.inspect_failing_ci",
+                        signals_by_rule.get("ci.failing", []),
+                        reasons_by_rule.get("readiness.blocked.ci_failing", []),
+                        _ci_failure_action_evidence(snapshot, items),
+                        ranked_positions,
+                        action_id=f"action.inspect_failing_ci.{group_key}",
+                        title=actionable_ci_title(items[0]),
+                        description=actionable_ci_description(items),
+                    )
+                )
+        else:
+            actions.append(
+                _action(
+                    "action.inspect_failing_ci",
+                    signals_by_rule.get("ci.failing", []),
+                    reasons_by_rule.get("readiness.blocked.ci_failing", []),
+                    _ci_failure_action_evidence(snapshot),
+                    ranked_positions,
+                )
             )
-        )
     elif snapshot.ci.state == CiState.PENDING or "ci.pending" in signals_by_rule:
-        actions.append(
-            _action(
-                "action.await_pending_ci",
-                signals_by_rule.get("ci.pending", []),
-                reasons_by_rule.get("readiness.not_ready.ci_pending", []),
-                [f"Observed CI state: {snapshot.ci.state.value}."],
-                ranked_positions,
+        pending_items = [
+            item
+            for surface in snapshot.ci_explanation.surfaces
+            for item in surface.items
+            if item.normalized_state == "pending"
+        ]
+        if pending_items:
+            for group_key, items in _group_ci_items(pending_items).items():
+                actions.append(
+                    _action(
+                        "action.await_pending_ci",
+                        signals_by_rule.get("ci.pending", []),
+                        reasons_by_rule.get("readiness.not_ready.ci_pending", []),
+                        [snapshot.ci_explanation.summary, *[f"Pending CI item: {item.provider} / {item.name} ({item.category.value}, {item.normalized_state})." for item in items]],
+                        ranked_positions,
+                        action_id=f"action.await_pending_ci.{group_key}",
+                        title=actionable_ci_title(items[0]),
+                        description=actionable_ci_description(items),
+                    )
+                )
+        else:
+            actions.append(
+                _action(
+                    "action.await_pending_ci",
+                    signals_by_rule.get("ci.pending", []),
+                    reasons_by_rule.get("readiness.not_ready.ci_pending", []),
+                    [f"Observed CI state: {snapshot.ci.state.value}."],
+                    ranked_positions,
+                )
             )
-        )
 
     visibility_signals = [signal for rule_id in CI_VISIBILITY_SIGNAL_RULE_IDS for signal in signals_by_rule.get(rule_id, [])]
     if (
@@ -186,7 +223,7 @@ def _review_concern_rule_id(thread: ReviewThreadRecord) -> str | None:
     return None
 
 
-def _ci_failure_action_evidence(snapshot: PullRequestSnapshot) -> list[str]:
+def _ci_failure_action_evidence(snapshot: PullRequestSnapshot, blocking_items=None) -> list[str]:
     explanation = snapshot.ci_explanation
     if not explanation.total_count:
         return [f"Observed CI state: {snapshot.ci.state.value}.", "MergeSignal does not infer which checks are required."]
@@ -194,7 +231,7 @@ def _ci_failure_action_evidence(snapshot: PullRequestSnapshot) -> list[str]:
         explanation.summary,
         "MergeSignal does not infer which checks are required.",
     ]
-    for item in explanation.blocking_items[:3]:
+    for item in (blocking_items if blocking_items is not None else explanation.blocking_items)[:3]:
         evidence.append(f"Blocking CI item: {item.provider} / {item.name} ({item.category.value}, {item.normalized_state}).")
         if item.description:
             evidence.append(f"Provider detail: {item.description}")
@@ -209,6 +246,15 @@ def _ci_failure_action_evidence(snapshot: PullRequestSnapshot) -> list[str]:
     for item in passed:
         evidence.append(f"Passed CI item: {item.provider} / {item.name}.")
     return evidence
+
+
+def _group_ci_items(items) -> dict[str, list]:
+    grouped: dict[str, list] = {}
+    for item in sorted(items, key=lambda item: (item.source_type.value, item.provider.casefold(), item.category.value, item.name.casefold())):
+        provider = str(item.provider or "unknown").strip().casefold() or "unknown"
+        category = str(item.category.value or "unknown").strip().casefold() or "unknown"
+        grouped.setdefault(f"{item.source_type.value}.{provider}.{category}", []).append(item)
+    return grouped
 
 
 def _security_actions(
@@ -400,14 +446,16 @@ def _action(
     *,
     affected_files: list[str] | None = None,
     action_id: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
 ) -> ReviewAction:
     rule = RULE_BY_ID[rule_id]
     files = affected_files if affected_files is not None else [path for signal in signals for path in signal.affected_files]
     return ReviewAction(
         id=action_id or rule.rule_id,
         rule_id=rule.rule_id,
-        title=rule.title,
-        description=rule.description,
+        title=title or rule.title,
+        description=description or rule.description,
         priority=rule.priority,
         category=rule.category,
         affected_files=unique_file_ordered(files, ranked_positions),

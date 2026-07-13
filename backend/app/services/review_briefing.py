@@ -15,6 +15,7 @@ from app.domain.pull_request import (
 )
 from app.domain.review_action import ReviewAction
 from app.domain.review_signal import SignalSeverity
+from app.services.ci_explanation import actionable_ci_description, actionable_ci_title
 
 MAX_FOCUS_ITEMS = 3
 MAX_PRIORITY_FILES = 3
@@ -60,18 +61,10 @@ def _ci_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
     for _, ci_items in sorted(grouped.items(), key=lambda entry: entry[0]):
         item = ci_items[0]
         identifiers = sorted({_canonical_ci_item_id(candidate) for candidate in ci_items})
-        category = _category_label(item.category.value)
-        provider = _provider_display_name(item.provider)
-        title = f"Inspect failed {provider} check" if category == "unknown" else f"Inspect failed {provider} {category} check"
-        descriptions = sorted({candidate.description for candidate in ci_items if candidate.description})
-        if len(ci_items) > 1:
-            description = f"{len(ci_items)} {category} checks require review."
-        else:
-            description = descriptions[0] if descriptions else f"{item.name} is currently failing."
         items.append(
             ReviewBriefingFocusItem(
-                title=title,
-                description=description,
+                title=actionable_ci_title(item),
+                description=actionable_ci_description(ci_items),
                 severity="high",
                 source_type=BriefingSourceType.CI,
                 affected_files=[],
@@ -80,6 +73,26 @@ def _ci_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
             )
         )
     if not items and snapshot.ci.state == CiState.PENDING:
+        pending_items = [
+            item
+            for surface in snapshot.ci_explanation.surfaces
+            for item in surface.items
+            if item.normalized_state == "pending"
+        ]
+        if pending_items:
+            item = pending_items[0]
+            identifiers = sorted({_canonical_ci_item_id(candidate) for candidate in pending_items})
+            return [
+                ReviewBriefingFocusItem(
+                    title=actionable_ci_title(item),
+                    description=actionable_ci_description(pending_items),
+                    severity="medium",
+                    source_type=BriefingSourceType.CI,
+                    affected_files=[],
+                    url=_safe_url(item.details_url),
+                    provenance=identifiers,
+                )
+            ]
         items.append(
             ReviewBriefingFocusItem(
                 title="Wait for pending CI checks",
@@ -358,19 +371,19 @@ def _headline(snapshot: PullRequestSnapshot, primary: ReviewBriefingReason | Non
         count = snapshot.ci.pending_count or snapshot.ci_explanation.pending_count
         return f"Not ready while {count} {_plural(count, 'check is', 'checks are')} pending."
     if status == "ready_with_caution" and primary:
-        return f"Ready with caution because {primary.title.lower()}."
+        return f"Ready with caution because {_sentence_fragment(primary.title)}."
     if status == "ready":
         suffix = "currently visible evidence"
         if snapshot.evidence_confidence.score < 100:
             suffix = "the currently visible evidence, with noted evidence limits"
         return f"Ready based on {suffix}."
     if primary:
-        return f"{_title_status(status)} because {primary.title.lower()}."
+        return f"{_title_status(status)} because {_sentence_fragment(primary.title)}."
     return f"{_title_status(status)} based on the currently visible evidence."
 
 
 def _sentence_fragment(value: str) -> str:
-    if "GitHub Actions" in value or "Vercel" in value or "CircleCI" in value:
+    if any(provider in value for provider in ("GitHub Actions", "GitHub", "Vercel", "CircleCI")):
         return value[:1].lower() + value[1:]
     return value.lower()
 
@@ -579,12 +592,6 @@ def _imperative_title(title: str) -> str:
     return title.rstrip(".")
 
 
-def _category_label(category: str) -> str:
-    if category == "authorization_or_configuration":
-        return "authorization/configuration"
-    return category.replace("_", " ")
-
-
 def _canonical_ci_item_id(item) -> str:
     provider = str(item.provider or "unknown").strip() or "unknown"
     name = str(item.name or provider).strip() or provider
@@ -618,20 +625,6 @@ def _focus_key(item: ReviewBriefingFocusItem) -> str:
         thread_ids = sorted(id for id in item.provenance if id.startswith("review-thread-"))
         return f"review:{','.join(thread_ids)}" if thread_ids else f"review:{item.title.casefold()}:{','.join(item.affected_files)}"
     return f"{item.source_type.value}:{item.title.casefold()}:{','.join(sorted(item.affected_files))}"
-
-
-def _provider_display_name(value: str) -> str:
-    normalized = str(value or "").strip()
-    if not normalized:
-        return "Unknown provider"
-    lower = normalized.casefold().replace("_", " ").replace("-", " ")
-    known = {
-        "github actions": "GitHub Actions",
-        "vercel": "Vercel",
-        "circleci": "CircleCI",
-        "circle ci": "CircleCI",
-    }
-    return known.get(lower, " ".join(word.upper() if word in {"ci", "api"} else word.capitalize() for word in lower.split()))
 
 
 def _severity_order(value: str) -> int:

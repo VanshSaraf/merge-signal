@@ -49,9 +49,66 @@ def primary_blocker_phrase(explanation: CiExplanation | None) -> str | None:
     if not explanation or not explanation.blocking_items:
         return None
     item = explanation.blocking_items[0]
-    category = _category_label(item.category)
-    provider = item.provider if item.provider and item.provider != item.name else item.name
+    category = ci_category_display_label(item.category)
+    provider = ci_provider_display_name(item.provider if item.provider and item.provider != item.name else item.name)
     return f"a failed {provider} {category} check"
+
+
+def actionable_ci_title(item: CiExplanationItem | None, *, state: str | None = None) -> str:
+    normalized_state = (state or item.normalized_state if item else state or "").strip().casefold()
+    action = "pending" if normalized_state == "pending" else "failed" if normalized_state == "failing" else normalized_state
+    if action not in {"failed", "pending"}:
+        action = "CI"
+    if item is None:
+        return "Inspect failed CI check" if action == "failed" else "Inspect pending CI check" if action == "pending" else "Inspect CI check"
+    provider = ci_provider_display_name(item.provider)
+    category = ci_category_display_label(item.category)
+    if provider == "Unknown provider":
+        return f"Inspect {action} CI check"
+    if category == "unknown":
+        return f"Inspect {action} {provider} check"
+    return f"Inspect {action} {provider} {category} check"
+
+
+def actionable_ci_description(items: list[CiExplanationItem]) -> str:
+    if not items:
+        return "Review the observable CI state for the current head SHA."
+    descriptions = sorted({item.description.strip() for item in items if item.description and item.description.strip()})
+    if len(items) == 1:
+        item = items[0]
+        if descriptions:
+            return descriptions[0].rstrip(".") + "."
+        state = "pending" if item.normalized_state == "pending" else "failing" if item.normalized_state == "failing" else item.normalized_state
+        return f"{item.name} is currently {state}."
+    category = ci_category_display_label(items[0].category)
+    state = "pending" if items[0].normalized_state == "pending" else "failing" if items[0].normalized_state == "failing" else items[0].normalized_state
+    category_prefix = "" if category == "unknown" else f"{category} "
+    return f"{len(items)} {category_prefix}{_plural('check', len(items))} require review while {state}."
+
+
+def ci_provider_display_name(value: str | None) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "Unknown provider"
+    lower = normalized.casefold().replace("_", " ").replace("-", " ")
+    known = {
+        "github": "GitHub",
+        "github actions": "GitHub Actions",
+        "github checks": "GitHub Checks",
+        "vercel": "Vercel",
+        "circleci": "CircleCI",
+        "circle ci": "CircleCI",
+    }
+    return known.get(lower, " ".join(word.upper() if word in {"ci", "api"} else word.capitalize() for word in lower.split()))
+
+
+def ci_category_display_label(category: CiSurfaceCategory | str | None) -> str:
+    value = category.value if isinstance(category, CiSurfaceCategory) else str(category or "unknown")
+    labels = {
+        "authorization_or_configuration": "authorization/configuration",
+        "typecheck": "typecheck",
+    }
+    return labels.get(value, value.replace("_", " "))
 
 
 def _item_from_check_run(run: CheckRunRecord) -> CiExplanationItem:
@@ -205,8 +262,8 @@ def _summary(ci: PullRequestCi, items: list[CiExplanationItem], blocking_items: 
     if pending_count == len(items):
         return f"{pending_count} { _plural('check', pending_count) } { _is_are(pending_count) } still pending."
     if blocking_items:
-        category = _category_label(blocking_items[0].category)
-        provider = blocking_items[0].provider
+        category = ci_category_display_label(blocking_items[0].category)
+        provider = ci_provider_display_name(blocking_items[0].provider)
         parts.append(f"{len(blocking_items)} {category} { _plural('check', len(blocking_items)) } { _is_are(len(blocking_items)) } failing on {provider}")
     if passing_count:
         parts.append(f"{passing_count} { _plural('check', passing_count) } passed")
@@ -220,11 +277,7 @@ def _summary(ci: PullRequestCi, items: list[CiExplanationItem], blocking_items: 
 
 
 def _category_label(category: CiSurfaceCategory) -> str:
-    labels = {
-        CiSurfaceCategory.AUTHORIZATION_OR_CONFIGURATION: "authorization/configuration",
-        CiSurfaceCategory.TYPECHECK: "typecheck",
-    }
-    return labels.get(category, category.value.replace("_", " "))
+    return ci_category_display_label(category)
 
 
 def _plural(word: str, count: int) -> str:

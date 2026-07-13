@@ -381,11 +381,157 @@ def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
     assert snapshot.merge_readiness.decision.value == "blocked"
     assert "failed Vercel authorization/configuration check" in snapshot.merge_readiness.reasons[0].explanation
     actions = actions_by_rule(snapshot)
+    assert actions["action.inspect_failing_ci"].title == "Inspect failed Vercel authorization/configuration check"
+    assert actions["action.inspect_failing_ci"].description == "Authorization required to deploy."
     evidence = " ".join(actions["action.inspect_failing_ci"].evidence)
     assert "Vercel" in evidence
     assert "Authorization required to deploy." in evidence
     assert "https://vercel.com/git/authorize?repo=octocat" in evidence
     assert "Passed CI item: GitHub Actions / Static checks & unit tests." in actions["action.inspect_failing_ci"].evidence
+
+
+def test_failing_ci_actions_use_provider_category_titles_and_keep_scores_stable() -> None:
+    snapshot = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=10,
+                name="Unit tests",
+                status="completed",
+                conclusion="failure",
+                provider_name="github actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/10",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+            CheckRunRecord(
+                id=11,
+                name="Build package",
+                status="completed",
+                conclusion="failure",
+                provider_name="GitHub Actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/11",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+        ],
+    )
+    actions, _summary = build_review_actions(snapshot)
+    ci_actions = [action for action in actions if action.rule_id == "action.inspect_failing_ci"]
+
+    assert [action.title for action in ci_actions] == [
+        "Inspect failed GitHub Actions build check",
+        "Inspect failed GitHub Actions test check",
+    ]
+    assert all(action.title != "Inspect failing CI" for action in ci_actions)
+    assert all("github actions" not in action.title for action in ci_actions)
+    assert all("GitHub Actions GitHub Actions" not in action.title for action in ci_actions)
+    assert snapshot.merge_risk.score == calculate_merge_risk(snapshot.signals).score
+    assert snapshot.merge_readiness.decision.value == "blocked"
+    assert snapshot.evidence_confidence.score == calculate_evidence_confidence(snapshot).score
+
+
+def test_equivalent_failing_ci_actions_merge_and_retain_item_evidence() -> None:
+    snapshot = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=20,
+                name="Unit tests",
+                status="completed",
+                conclusion="failure",
+                provider_name="GitHub Actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/20",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+            CheckRunRecord(
+                id=21,
+                name="Integration tests",
+                status="completed",
+                conclusion="failure",
+                provider_name="github actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/21",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+        ],
+    )
+    actions, _summary = build_review_actions(snapshot)
+    ci_actions = [action for action in actions if action.rule_id == "action.inspect_failing_ci"]
+
+    assert len(ci_actions) == 1
+    assert ci_actions[0].title == "Inspect failed GitHub Actions test check"
+    assert ci_actions[0].description == "2 test checks require review while failing."
+    evidence = " ".join(ci_actions[0].evidence)
+    assert "Unit tests" in evidence
+    assert "Integration tests" in evidence
+
+
+def test_pending_ci_action_uses_specific_provider_title() -> None:
+    snapshot = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=30,
+                name="Unit tests",
+                status="queued",
+                conclusion=None,
+                provider_name="github actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/30",
+                started_at=BASE_TIME,
+                completed_at=None,
+            )
+        ],
+    )
+    actions = actions_by_rule(snapshot)
+
+    assert actions["action.await_pending_ci"].title == "Inspect pending GitHub Actions test check"
+    assert "github actions" not in actions["action.await_pending_ci"].title
+
+
+def test_unknown_ci_provider_and_category_use_readable_fallbacks() -> None:
+    unknown_category = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=40,
+                name="Custom gate",
+                status="completed",
+                conclusion="failure",
+                provider_name="internal ci",
+                provider_slug="internal-ci",
+                details_url="https://ci.review-console.example/runs/40",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            )
+        ],
+    )
+    unknown_provider = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=41,
+                name="Custom gate",
+                status="completed",
+                conclusion="failure",
+                provider_name=None,
+                provider_slug=None,
+                details_url="https://ci.review-console.example/runs/41",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            )
+        ],
+    )
+
+    assert actions_by_rule(unknown_category)["action.inspect_failing_ci"].title == "Inspect failed Internal CI check"
+    assert "unknown check check" not in actions_by_rule(unknown_category)["action.inspect_failing_ci"].title
+    assert actions_by_rule(unknown_provider)["action.inspect_failing_ci"].title == "Inspect failed GitHub Checks check"
 
 
 def test_review_concern_lifecycle_actions_are_deduplicated_traceable_and_non_scoring() -> None:

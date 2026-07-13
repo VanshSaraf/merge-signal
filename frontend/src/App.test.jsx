@@ -787,6 +787,19 @@ function auditedReviewerFlowSnapshot() {
     ],
     review_actions: [
       {
+        id: "action.inspect_failing_ci.commit_status.vercel.authorization_or_configuration",
+        rule_id: "action.inspect_failing_ci",
+        title: "Inspect failed Vercel authorization/configuration check",
+        description: "Authorization required to deploy.",
+        priority: "high",
+        category: "ci",
+        affected_files: [],
+        related_signal_ids: ["ci.failing"],
+        related_readiness_rule_ids: ["readiness.blocked.ci_failing"],
+        evidence: ["Details URL: https://vercel.com/git/authorize?repo=sample-org/review-console", "Blocking CI item: Vercel / Vercel (authorization_or_configuration, failing)."],
+        limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
+      },
+      {
         id: "action.review_concern.verify_author_response.8101",
         rule_id: "action.review_concern.verify_author_response",
         title: "Verify the author response",
@@ -826,7 +839,7 @@ function auditedReviewerFlowSnapshot() {
         limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
     ],
-    review_action_summary: { total_actions: 3, limitations: [] },
+    review_action_summary: { total_actions: 4, limitations: [] },
     review_briefing: {
       status: "blocked",
       headline: "Blocked by failed Vercel authorization/configuration check.",
@@ -1197,10 +1210,10 @@ describe("App", () => {
         },
         review_actions: [
           {
-            id: "action.inspect_failing_ci",
+            id: "action.inspect_failing_ci.commit_status.vercel.authorization_or_configuration",
             rule_id: "action.inspect_failing_ci",
-            title: "Inspect failing CI",
-            description: "Open the failing CI surface and inspect the provider evidence before reassessing readiness.",
+            title: "Inspect failed Vercel authorization/configuration check",
+            description: "Authorization required to deploy.",
             priority: "high",
             category: "ci",
             affected_files: [],
@@ -1225,6 +1238,8 @@ describe("App", () => {
     expect(screen.getByRole("region", { name: "CI surface summary" })).not.toHaveTextContent("VercelVercel");
     expect(screen.getAllByText("Authorization required to deploy.").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
+    expect(screen.getAllByText("Inspect failed Vercel authorization/configuration check").length).toBeGreaterThan(1);
+    expect(screen.queryByText("Inspect failing CI")).not.toBeInTheDocument();
 
     await user.click(screen.getByText("View CI surface details"));
     expect(screen.getByText("Static checks & unit tests")).toBeInTheDocument();
@@ -1232,6 +1247,8 @@ describe("App", () => {
     expect(screen.queryByText("VercelVercel")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Actions" }));
+    expect(screen.getByRole("heading", { name: "Inspect failed Vercel authorization/configuration check" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Inspect failing CI" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View details" }));
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
   });
@@ -1265,6 +1282,9 @@ describe("App", () => {
     expect(briefing).not.toHaveTextContent("CI reports a failing state");
     expect(briefing).not.toHaveTextContent("Inspect failing CI");
     expect(briefing).not.toHaveTextContent("Review highest-priority files");
+    expect(screen.getAllByText("Inspect failed Vercel authorization/configuration check").length).toBeGreaterThan(1);
+    expect(screen.getByText("Start with the evidence that can change merge readiness.")).toBeInTheDocument();
+    expect(screen.queryByText("Inspect failing CI")).not.toBeInTheDocument();
 
     const ciSummary = screen.getByRole("region", { name: "CI surface summary" });
     expect(ciSummary).toHaveTextContent("Vercel");
@@ -1280,6 +1300,10 @@ describe("App", () => {
     expect(screen.queryByText("true inline conversations")).not.toBeInTheDocument();
     expect(screen.queryByText("VercelVercel")).not.toBeInTheDocument();
     expect(screen.queryByText(/<script|Authorization:|Bearer|@@|diff --git/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
+    expect(screen.getByRole("heading", { name: "Inspect failed Vercel authorization/configuration check" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Inspect failing CI" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Reviews (2)" }));
     expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Author response needs verification");

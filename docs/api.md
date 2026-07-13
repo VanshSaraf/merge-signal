@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, formal review-thread resolution detection, or approval-state decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, builds the deterministic Review Briefing, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, formal review-thread resolution detection, or approval-state decisions.
 
 Request:
 
@@ -511,6 +511,7 @@ Snapshot components:
 - `file_priority_summary`: counts and limitations for deterministic changed-file review priorities.
 - `review_actions`: deterministic prompts describing what a human reviewer should verify next.
 - `review_action_summary`: counts and limitations for deterministic review actions.
+- `review_briefing`: concise deterministic reviewer workflow derived from current snapshot evidence.
 - `completeness`: booleans and warnings describing partial data.
 - `rate_limit`: latest successful GitHub rate-limit headers when available.
 

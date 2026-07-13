@@ -1,0 +1,235 @@
+from datetime import UTC, datetime
+
+from app.domain.pull_request import (
+    ChangedFile,
+    CiCompleteness,
+    CiState,
+    CiVisibility,
+    CommitStatusRecord,
+    GitHubRateLimit,
+    PullRequestAuthor,
+    PullRequestBranch,
+    PullRequestCi,
+    PullRequestCommit,
+    PullRequestMetadata,
+    PullRequestReference,
+    PullRequestReviewRecord,
+    PullRequestSnapshot,
+    ReviewCommentRecord,
+    ReviewState,
+    SnapshotCompleteness,
+)
+from app.domain.review_signal import EvidenceKind, ReviewSignal, SignalCategory, SignalEvidence, SignalScope, SignalSeverity
+from app.file_priority import calculate_file_priorities
+from app.readiness import calculate_merge_readiness
+from app.review_actions import build_review_actions
+from app.scoring import calculate_evidence_confidence, calculate_merge_risk
+from app.services.ci_explanation import build_ci_explanation
+from app.services.ci_state import aggregate_ci_state
+from app.services.file_classifier import classify_changed_files
+from app.services.review_briefing import build_review_briefing
+from app.services.review_context import build_review_context, sanitize_review_body
+from app.signals.engine import analyze_snapshot_signals
+
+BASE_TIME = datetime(2026, 7, 12, 10, 0, tzinfo=UTC)
+
+
+def changed_file(filename: str, *, additions: int = 1, deletions: int = 1, patch: str | None = "@@ -1 +1 @@\n-old\n+new") -> ChangedFile:
+    return ChangedFile(filename=filename, status="modified", additions=additions, deletions=deletions, changes=additions + deletions, patch=patch, previous_filename=None, blob_url=None)
+
+
+def review_record(reviewer_login: str, state: ReviewState) -> PullRequestReviewRecord:
+    return PullRequestReviewRecord(id=900, reviewer_login=reviewer_login, state=state, submitted_at=BASE_TIME, body_excerpt=None, html_url="https://github.com/octocat/Hello-World/pull/42#pullrequestreview-900", commit_sha="head")
+
+
+def review_comment(id: int, reviewer_login: str, body: str, *, path: str, in_reply_to_id: int | None = None, created_at: datetime = BASE_TIME, current_position: int | None = 3) -> ReviewCommentRecord:
+    return ReviewCommentRecord(
+        id=id,
+        reviewer_login=reviewer_login,
+        body_excerpt=sanitize_review_body(body) or "",
+        created_at=created_at,
+        updated_at=None,
+        html_url=f"https://github.com/octocat/Hello-World/pull/42#discussion_r{id}",
+        pull_request_review_id=900,
+        in_reply_to_id=in_reply_to_id,
+        path=path,
+        line=12,
+        start_line=None,
+        side="RIGHT",
+        start_side=None,
+        current_position=current_position,
+        original_position=3,
+        commit_sha="head",
+    )
+
+
+def high_signal(path: str, signal_id: str = "sig-high") -> ReviewSignal:
+    return ReviewSignal(
+        id=signal_id,
+        rule_id="security.credential_like_literal_added",
+        title="Credential-like literal pattern added",
+        description="A high-severity security signal was observed.",
+        category=SignalCategory.SECURITY,
+        severity=SignalSeverity.HIGH,
+        scope=SignalScope.FILE,
+        affected_files=[path],
+        evidence=[SignalEvidence(kind=EvidenceKind.METADATA, message="Sanitized fixture evidence.")],
+        limitations=[],
+        tags=["fixture"],
+    )
+
+
+def snapshot(files: list[ChangedFile], *, ci: PullRequestCi | None = None, review_context=None, signals: list[ReviewSignal] | None = None, files_complete: bool = True) -> PullRequestSnapshot:
+    classified_files, classification_summary = classify_changed_files(files)
+    ci = ci or passing_ci()
+    base = PullRequestSnapshot(
+        reference=PullRequestReference(owner="octocat", repository="Hello-World", pull_number=42, canonical_url="https://github.com/octocat/Hello-World/pull/42"),
+        metadata=PullRequestMetadata(
+            number=42,
+            title="Briefing fixture",
+            body="Fixture",
+            state="open",
+            draft=False,
+            html_url="https://github.com/octocat/Hello-World/pull/42",
+            author=PullRequestAuthor(login="octocat", avatar_url=None, html_url=None),
+            base_branch=PullRequestBranch(ref="main", sha="base", repository_full_name="octocat/Hello-World"),
+            head_branch=PullRequestBranch(ref="feature", sha="head", repository_full_name="octocat/Hello-World"),
+            head_sha="head",
+            created_at=BASE_TIME,
+            updated_at=BASE_TIME,
+            closed_at=None,
+            merged_at=None,
+            additions=sum(file.additions for file in classified_files),
+            deletions=sum(file.deletions for file in classified_files),
+            changed_files=len(classified_files),
+            commit_count=1,
+            mergeable=None,
+            mergeable_state=None,
+            labels=[],
+        ),
+        files=classified_files,
+        commits=[PullRequestCommit(sha="head", message="Fixture", html_url=None, author_login=None, author_name=None, authored_at=BASE_TIME, committed_at=BASE_TIME)],
+        ci=ci,
+        ci_explanation=build_ci_explanation(ci),
+        review_context=review_context if review_context is not None else build_review_context([], [], reviews_complete=True, comments_complete=True, review_pages_fetched=0, comment_pages_fetched=0, pr_author_login="octocat", head_sha="head"),
+        classification_summary=classification_summary,
+        signals=signals or [],
+        completeness=SnapshotCompleteness(files_complete=files_complete, commits_complete=True, missing_patch_count=sum(1 for file in classified_files if file.patch is None), warnings=[] if files_complete else ["Changed-file collection was incomplete."]),
+        fetched_at=BASE_TIME,
+        rate_limit=GitHubRateLimit(limit=None, remaining=None, used=None, resource=None, reset_at=None),
+    )
+    if signals is None:
+        signal_result = analyze_snapshot_signals(base)
+        base = base.model_copy(update={"signals": signal_result.signals, "signal_summary": signal_result.summary})
+    base = base.model_copy(update={"merge_risk": calculate_merge_risk(base.signals), "evidence_confidence": calculate_evidence_confidence(base)})
+    base = base.model_copy(update={"merge_readiness": calculate_merge_readiness(base)})
+    ranked_files, file_priority_summary = calculate_file_priorities(base)
+    base = base.model_copy(update={"ranked_files": ranked_files, "file_priority_summary": file_priority_summary})
+    review_actions, review_action_summary = build_review_actions(base)
+    return base.model_copy(update={"review_actions": review_actions, "review_action_summary": review_action_summary, "review_briefing": build_review_briefing(base.model_copy(update={"review_actions": review_actions, "review_action_summary": review_action_summary}))})
+
+
+def passing_ci() -> PullRequestCi:
+    return PullRequestCi(
+        state=CiState.PASSING,
+        visibility=CiVisibility.COMPLETE,
+        check_runs=[],
+        commit_statuses=[],
+        total_check_runs=0,
+        total_status_contexts=0,
+        passing_count=1,
+        failing_count=0,
+        pending_count=0,
+        neutral_count=0,
+        skipped_count=0,
+        warnings=[],
+        fetched_at=BASE_TIME,
+        completeness=CiCompleteness(check_runs_complete=True, commit_statuses_complete=True, check_run_pages_fetched=1, commit_status_pages_fetched=1, raw_status_record_count=0, unique_status_context_count=0, warnings=[]),
+        rate_limit=None,
+    )
+
+
+def failing_vercel_ci() -> PullRequestCi:
+    return aggregate_ci_state(
+        [],
+        [
+            CommitStatusRecord(
+                id=1,
+                context="Vercel",
+                state="failure",
+                description="Authorization required to deploy.",
+                target_url="https://vercel.com/git/authorize?repo=octocat",
+                creator_login="vercel[bot]",
+                created_at=BASE_TIME,
+                updated_at=BASE_TIME,
+            )
+        ],
+        check_runs_complete=True,
+        commit_statuses_complete=True,
+        check_run_pages_fetched=1,
+        commit_status_pages_fetched=1,
+        total_check_runs=0,
+    )
+
+
+def test_briefing_identifies_specific_blocking_ci_surface_and_safe_link() -> None:
+    result = snapshot([changed_file("backend/app/main.py")], ci=failing_vercel_ci())
+    briefing = result.review_briefing
+
+    assert briefing.status == "blocked"
+    assert briefing.headline == "Blocked by failed vercel authorization/configuration check."
+    assert briefing.primary_reason is not None
+    assert briefing.primary_reason.url == "https://vercel.com/git/authorize?repo=octocat"
+    assert briefing.review_focus[0].title == "Inspect failed Vercel authorization/configuration check"
+    assert "ci:commit_status:Vercel:Vercel" in briefing.provenance.ci_item_ids
+    assert result.merge_readiness.decision.value == "blocked"
+
+
+def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:
+    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    review_context = build_review_context(
+        [review_record("reviewer", ReviewState.COMMENTED)],
+        [
+            review_comment(901, "reviewer", "Please revise this.", path=path),
+            review_comment(902, "octocat", "Fixed.", path=path, in_reply_to_id=901, created_at=BASE_TIME.replace(minute=1)),
+            review_comment(903, "reviewer", "Outdated concern.", path="backend/old.py", current_position=None),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    result = snapshot([changed_file(path, additions=220, deletions=159), changed_file("backend/old.py")], review_context=review_context)
+    briefing = result.review_briefing
+
+    assert any(item.title == "Verify the author's claimed fix" for item in briefing.review_focus)
+    assert all("backend/old.py" not in item.affected_files for item in briefing.review_focus)
+    assert "is verified" not in " ".join(item.description for item in briefing.review_focus).casefold()
+    assert "review-thread-901" in briefing.provenance.review_thread_ids
+    assert "review-thread-903" not in briefing.provenance.review_thread_ids
+
+
+def test_briefing_limits_items_deduplicates_and_keeps_current_snapshot_provenance() -> None:
+    files = [changed_file(f"backend/app/file_{index}.py", additions=100, deletions=20) for index in range(6)]
+    signals = [high_signal(file.filename, f"sig-{index}") for index, file in enumerate(files)]
+    result = snapshot(files, signals=signals, files_complete=False)
+    briefing = result.review_briefing
+
+    assert len(briefing.review_focus) <= 3
+    assert len(briefing.priority_files) <= 3
+    assert len(briefing.recommended_steps) <= 5
+    assert len(briefing.checklist) <= 8
+    assert set(briefing.provenance.file_paths) <= {file.filename for file in files}
+    assert all("not-a-real-secret-fixture" not in item for item in briefing.checklist)
+
+
+def test_ready_briefing_has_current_visible_evidence_headline() -> None:
+    result = snapshot([changed_file("docs/readme.md")])
+    briefing = result.review_briefing
+
+    assert briefing.status == "ready"
+    assert briefing.headline.startswith("Ready based on")
+    assert briefing.primary_reason is not None
+    assert briefing.primary_reason.source_ids == ["readiness.ready_baseline"]

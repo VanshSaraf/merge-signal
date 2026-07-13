@@ -53,6 +53,7 @@ from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.ci_explanation import build_ci_explanation
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
+from app.services.review_briefing import build_review_briefing
 from app.services.review_context import (
     build_review_context,
     normalize_review_state,
@@ -347,12 +348,13 @@ class GitHubRestClient:
             }
         )
         review_actions, review_action_summary = build_review_actions(scored_snapshot)
-        return scored_snapshot.model_copy(
+        scored_snapshot = scored_snapshot.model_copy(
             update={
                 "review_actions": review_actions,
                 "review_action_summary": review_action_summary,
             }
         )
+        return scored_snapshot.model_copy(update={"review_briefing": build_review_briefing(scored_snapshot)})
 
     def _headers(self) -> dict[str, str]:
         headers = {

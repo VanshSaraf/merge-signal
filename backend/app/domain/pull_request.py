@@ -300,6 +300,91 @@ class GitHubRateLimit(StrictDomainModel):
     reset_at: datetime | None = Field(description="Rate-limit reset time when available.")
 
 
+class BriefingSourceType(StrEnum):
+    READINESS = "readiness"
+    CI = "ci"
+    REVIEW_CONCERN = "review_concern"
+    REVIEW_SIGNAL = "review_signal"
+    REVIEW_ACTION = "review_action"
+    FILE_PRIORITY = "file_priority"
+    EVIDENCE = "evidence"
+
+
+class ReviewBriefingReason(StrictDomainModel):
+    title: str = Field(description="Concise reason title.")
+    category: str = Field(description="Reason category.")
+    severity: str = Field(description="Reason severity.")
+    source_type: BriefingSourceType = Field(description="Source evidence type.")
+    source_ids: list[str] = Field(description="Traceable source identifiers.")
+    affected_files: list[str] = Field(description="Affected file paths.")
+    url: str | None = Field(default=None, description="Safe URL when available.")
+
+
+class ReviewBriefingFocusItem(StrictDomainModel):
+    title: str = Field(description="Concise focus title.")
+    description: str = Field(description="Why this deserves reviewer attention.")
+    severity: str = Field(description="Focus severity.")
+    source_type: BriefingSourceType = Field(description="Source evidence type.")
+    affected_files: list[str] = Field(description="Affected file paths.")
+    url: str | None = Field(default=None, description="Safe URL when available.")
+    provenance: list[str] = Field(description="Traceable source identifiers.")
+
+
+class ReviewBriefingPriorityFile(StrictDomainModel):
+    path: str = Field(description="Changed file path.")
+    rank: int = Field(description="File review rank.")
+    score: int = Field(description="File priority score.")
+    level: str = Field(description="File priority level.")
+    reasons: list[str] = Field(description="Strongest concise priority reasons.")
+    url: str | None = Field(default=None, description="Safe GitHub file URL when derivable.")
+
+
+class ReviewBriefingStep(StrictDomainModel):
+    order: int = Field(description="Stable 1-based order.")
+    title: str = Field(description="Imperative step title.")
+    description: str = Field(description="Concise step description.")
+    category: str = Field(description="Step category.")
+    affected_files: list[str] = Field(description="Affected file paths.")
+    url: str | None = Field(default=None, description="Safe URL when available.")
+    source_ids: list[str] = Field(description="Traceable source identifiers.")
+
+
+class ReviewBriefingProvenance(StrictDomainModel):
+    readiness_reason_ids: list[str] = Field(default_factory=list, description="Readiness rule identifiers used.")
+    ci_item_ids: list[str] = Field(default_factory=list, description="CI item identifiers used.")
+    signal_ids: list[str] = Field(default_factory=list, description="Review signal identifiers used.")
+    action_ids: list[str] = Field(default_factory=list, description="Review action identifiers used.")
+    file_paths: list[str] = Field(default_factory=list, description="Ranked file paths used.")
+    review_thread_ids: list[str] = Field(default_factory=list, description="Review conversation identifiers used.")
+
+
+class ReviewBriefing(StrictDomainModel):
+    status: str = Field(description="Current readiness status.")
+    headline: str = Field(description="Deterministic briefing headline.")
+    summary: str = Field(description="Concise current-snapshot summary.")
+    primary_reason: ReviewBriefingReason | None = Field(default=None, description="Primary reason behind the briefing.")
+    review_focus: list[ReviewBriefingFocusItem] = Field(description="At most three ordered review-focus items.")
+    priority_files: list[ReviewBriefingPriorityFile] = Field(description="At most three ordered priority files.")
+    recommended_steps: list[ReviewBriefingStep] = Field(description="At most five ordered recommended steps.")
+    checklist: list[str] = Field(description="At most five copyable checklist entries.")
+    limitations: list[str] = Field(description="At most three relevant limitations.")
+    provenance: ReviewBriefingProvenance = Field(default_factory=ReviewBriefingProvenance, description="Traceable evidence used.")
+
+
+def empty_review_briefing() -> ReviewBriefing:
+    return ReviewBriefing(
+        status="ready",
+        headline="Ready based on the currently visible evidence.",
+        summary="No additional briefing evidence has been generated.",
+        primary_reason=None,
+        review_focus=[],
+        priority_files=[],
+        recommended_steps=[],
+        checklist=[],
+        limitations=["Human review remains necessary."],
+    )
+
+
 class CiState(StrEnum):
     PASSING = "passing"
     FAILING = "failing"
@@ -712,6 +797,10 @@ class PullRequestSnapshot(StrictDomainModel):
     review_action_summary: ReviewActionSummary = Field(
         default_factory=empty_review_action_summary,
         description="Summary of deterministic review actions.",
+    )
+    review_briefing: ReviewBriefing = Field(
+        default_factory=empty_review_briefing,
+        description="Concise deterministic reviewer workflow derived from current snapshot evidence.",
     )
     completeness: SnapshotCompleteness = Field(description="Snapshot completeness details.")
     fetched_at: datetime = Field(description="UTC timestamp when snapshot was fetched.")

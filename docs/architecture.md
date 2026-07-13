@@ -19,6 +19,7 @@ The backend is a FastAPI application under `backend/app`.
 - `app/readiness/` contains deterministic merge-readiness rule metadata, precedence, suppression, and evaluation.
 - `app/file_priority/` contains deterministic changed-file review-priority rules, factor caps, ordering, and summary generation.
 - `app/review_actions/` contains deterministic review-action rules, ordering, aggregation, suppression, and summary generation.
+- `app/services/review_briefing.py` builds the deterministic Review Briefing from completed snapshot evidence.
 - `app/integrations/github/` contains GitHub REST transport models, pagination, and the HTTPX client.
 - `app/models/` contains request, response, and API error models.
 - `app/errors.py` contains the stable application error used by parser failures.
@@ -49,13 +50,14 @@ HTTP request
 -> merge-readiness engine
 -> file-priority engine
 -> review-action engine
+-> review-briefing builder
 -> normalized PullRequestSnapshot domain model
 -> typed API response
 ```
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, observable review context, concern lifecycle, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, CODEOWNERS results, repository policy results, generated patches, merge commands, or formal review-thread resolution claims.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, review briefing, commits, read-only CI visibility, observable review context, concern lifecycle, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, CODEOWNERS results, repository policy results, generated patches, merge commands, or formal review-thread resolution claims.
 
 ## File Classification Service
 
@@ -117,6 +119,10 @@ File priority is separate from merge risk. It is a deterministic review-ordering
 The review-action engine lives under `app/review_actions/` and consumes the completed in-memory snapshot after file prioritization. It returns `review_actions` and `review_action_summary`, and it does not mutate signals, readiness reasons, risk contributions, confidence components, ranked files, CI, completeness, or classifications.
 
 Review actions are deterministic human-review prompts, not AI commentary, generated fixes, reviewer assignments, or probability claims. The engine uses explicit rule IDs only, aggregates related evidence, suppresses repetitive CI and testing prompts, sanitizes security evidence, can emit review-concern lifecycle prompts, and performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
+
+## Review-Briefing Builder
+
+The review-briefing builder consumes the completed in-memory snapshot after review actions exist. It creates a concise reviewer workflow with headline, primary reason, focus items, priority files, recommended steps, checklist text, limitations, and provenance. It does not add new evidence sources, scoring rules, readiness rules, network calls, semantic code analysis, or AI-generated commentary.
 
 ## Parser Service
 

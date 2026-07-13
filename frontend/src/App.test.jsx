@@ -418,6 +418,86 @@ function snapshotResponse(overrides = {}) {
     ],
     file_priority_summary: { limitations: ["A low-priority file must not be ignored."] },
     review_action_summary: { total_actions: 3, limitations: ["Actions are deterministic review prompts, not AI commentary."] },
+    review_briefing: {
+      status: "ready_with_caution",
+      headline: "Ready with caution because address the active reviewer change request.",
+      summary: "Ready With Caution readiness; 42/100 merge risk; 86/100 evidence confidence; 2 review focus items; start with backend/app/security/secrets.py.",
+      primary_reason: {
+        title: "Address the active reviewer change request",
+        category: "review_concern",
+        severity: "high",
+        source_type: "review_concern",
+        source_ids: ["review-thread-601"],
+        affected_files: ["backend/app/security/secrets.py"],
+        url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+      },
+      review_focus: [
+        {
+          title: "Address the active reviewer change request",
+          description: "The latest observable reviewer state still requests changes.",
+          severity: "high",
+          source_type: "review_concern",
+          affected_files: ["backend/app/security/secrets.py"],
+          url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+          provenance: ["review-thread-601"],
+        },
+        {
+          title: "Credential-like literal pattern added",
+          description: "A sanitized security signal was observed.",
+          severity: "high",
+          source_type: "review_signal",
+          affected_files: ["backend/app/security/secrets.py"],
+          url: null,
+          provenance: ["sig-security"],
+        },
+      ],
+      priority_files: [
+        {
+          path: "backend/app/security/secrets.py",
+          rank: 1,
+          score: 76,
+          level: "very_high",
+          reasons: ["Credential-like literal pattern affected this file.", "A reviewer currently requests changes on a conversation touching this file."],
+          url: "https://github.com/octocat/Hello-World/blob/head/backend/app/security/secrets.py",
+        },
+      ],
+      recommended_steps: [
+        {
+          order: 1,
+          title: "Address the active reviewer change request",
+          description: "The latest observable reviewer state still requests changes.",
+          category: "review_concern",
+          affected_files: ["backend/app/security/secrets.py"],
+          url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+          source_ids: ["review-thread-601"],
+        },
+        {
+          order: 2,
+          title: "Verify credential-like literal",
+          description: "Check whether the credential-like literal signal is intentional and safe.",
+          category: "security",
+          affected_files: ["backend/app/security/secrets.py"],
+          url: null,
+          source_ids: ["action.verify_credential_like_literal"],
+        },
+      ],
+      checklist: [
+        "MergeSignal Review Checklist",
+        "PR: octocat/Hello-World#42",
+        "Status: Ready With Caution",
+        "[ ] Address the active reviewer change request",
+        "[ ] Verify credential-like literal",
+      ],
+      limitations: ["Human review remains necessary.", "Evidence confidence measures visibility, not code quality."],
+      provenance: {
+        readiness_reason_ids: [],
+        ci_item_ids: [],
+        signal_ids: ["sig-security"],
+        action_ids: ["action.verify_credential_like_literal"],
+        file_paths: ["backend/app/security/secrets.py"],
+        review_thread_ids: ["review-thread-601"],
+      },
+    },
     completeness: {
       files_complete: true,
       commits_complete: true,
@@ -496,6 +576,10 @@ function renderApp() {
 describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn(() => Promise.resolve()) },
+    });
     global.fetch = vi.fn((url) => {
       if (String(url).endsWith("/health")) {
         return healthResponse();
@@ -597,8 +681,16 @@ describe("App", () => {
     expect(screen.getAllByText("42/100").length).toBeGreaterThan(0);
     expect(screen.getAllByText("86/100").length).toBeGreaterThan(0);
     expect(screen.getByText("Review next")).toBeInTheDocument();
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Ready with caution because address the active reviewer change request.");
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Address the active reviewer change request");
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Credential-like literal pattern affected this file.");
+    expect(screen.getByRole("link", { name: "Open review conversation" })).toHaveAttribute("href", "https://github.com/octocat/Hello-World/pull/42#discussion_r601");
+    expect(screen.getByRole("link", { name: "Open top file" })).toHaveAttribute("href", "https://github.com/octocat/Hello-World/blob/head/backend/app/security/secrets.py");
+    expect(screen.getByText("review-thread-601")).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Copy review checklist" }));
+    expect(await screen.findByText("Checklist copied")).toBeInTheDocument();
     expect(screen.getAllByText("Verify credential-like literal").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Start with backend\/app\/security\/secrets.py/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Start with backend\/app\/security\/secrets.py/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("readiness.caution.patch_visibility_partial")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
@@ -726,6 +818,52 @@ describe("App", () => {
           ],
           limitations: [],
         },
+        review_briefing: {
+          ...snapshotResponse().review_briefing,
+          status: "blocked",
+          headline: "Blocked by failed vercel authorization/configuration check.",
+          summary: "Blocked readiness; 42/100 merge risk; 86/100 evidence confidence; 1 review focus item.",
+          primary_reason: {
+            title: "Inspect failed Vercel authorization/configuration check",
+            category: "ci",
+            severity: "high",
+            source_type: "ci",
+            source_ids: ["ci:commit_status:Vercel:Vercel"],
+            affected_files: [],
+            url: "https://vercel.com/git/authorize?repo=octocat",
+          },
+          review_focus: [
+            {
+              title: "Inspect failed Vercel authorization/configuration check",
+              description: "Authorization required to deploy.",
+              severity: "high",
+              source_type: "ci",
+              affected_files: [],
+              url: "https://vercel.com/git/authorize?repo=octocat",
+              provenance: ["ci:commit_status:Vercel:Vercel"],
+            },
+          ],
+          recommended_steps: [
+            {
+              order: 1,
+              title: "Inspect failed Vercel authorization/configuration check",
+              description: "Authorization required to deploy.",
+              category: "ci",
+              affected_files: [],
+              url: "https://vercel.com/git/authorize?repo=octocat",
+              source_ids: ["ci:commit_status:Vercel:Vercel"],
+            },
+          ],
+          checklist: ["MergeSignal Review Checklist", "PR: octocat/Hello-World#42", "Status: Blocked", "[ ] Inspect failed Vercel authorization/configuration check"],
+          provenance: {
+            readiness_reason_ids: [],
+            ci_item_ids: ["ci:commit_status:Vercel:Vercel"],
+            signal_ids: [],
+            action_ids: [],
+            file_paths: [],
+            review_thread_ids: [],
+          },
+        },
         review_actions: [
           {
             id: "action.inspect_failing_ci",
@@ -750,8 +888,10 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByRole("heading", { name: /Blocked because Vercel authorization\/configuration check is failing/i })).toBeInTheDocument();
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Blocked by failed vercel authorization/configuration check.");
+    expect(screen.getByRole("link", { name: "Open blocking check" })).toHaveAttribute("href", "https://vercel.com/git/authorize?repo=octocat");
     expect(screen.getByRole("region", { name: "CI surface summary" })).toHaveTextContent("2 checks passed");
-    expect(screen.getByText("Authorization required to deploy.")).toBeInTheDocument();
+    expect(screen.getAllByText("Authorization required to deploy.").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
 
     await user.click(screen.getByText("View CI surface details"));
@@ -1076,6 +1216,18 @@ describe("App", () => {
         },
       ],
       review_action_summary: { total_actions: 1, limitations: [] },
+      review_briefing: {
+        status: "ready",
+        headline: "Ready based on the currently visible evidence.",
+        summary: "Ready readiness; 0/100 merge risk; 100/100 evidence confidence; start with frontend/src/App.jsx.",
+        primary_reason: { title: "No readiness concerns observed", category: "readiness", severity: "context", source_type: "readiness", source_ids: ["readiness.ready_baseline"], affected_files: [], url: null },
+        review_focus: [],
+        priority_files: [{ path: "frontend/src/App.jsx", rank: 1, score: 20, level: "low", reasons: [], url: "https://github.com/octocat/Hello-World/blob/head/frontend/src/App.jsx" }],
+        recommended_steps: [{ order: 1, title: "Review highest-priority files", description: "Use the highest-ranked changed files as a review-order starting point.", category: "file_review", affected_files: ["frontend/src/App.jsx"], url: null, source_ids: ["action.review_highest_priority_files"] }],
+        checklist: ["MergeSignal Review Checklist", "PR: octocat/Hello-World#43", "Status: Ready", "[ ] Review highest-priority files"],
+        limitations: ["Human review remains necessary."],
+        provenance: { readiness_reason_ids: ["readiness.ready_baseline"], ci_item_ids: [], signal_ids: [], action_ids: ["action.review_highest_priority_files"], file_paths: ["frontend/src/App.jsx"], review_thread_ids: [] },
+      },
       review_context: {
         ...snapshotResponse().review_context,
         review_count: 0,
@@ -1140,6 +1292,8 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByText("Plain frontend cleanup")).toBeInTheDocument();
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Ready based on the currently visible evidence.");
+    expect(screen.getByLabelText("Review briefing")).not.toHaveTextContent("backend/app/security/secrets.py");
     await user.click(screen.getByRole("tab", { name: "Overview" }));
     expect(screen.getByLabelText("Review focus")).toHaveTextContent("frontend/src/App.jsx");
     expect(screen.getByLabelText("Review focus")).not.toHaveTextContent("backend/app/security/secrets.py");
@@ -1165,6 +1319,18 @@ describe("App", () => {
         signal_summary: { total_signals: 0 },
         review_actions: [],
         review_action_summary: { total_actions: 0 },
+        review_briefing: {
+          status: "needs_manual_review",
+          headline: "Needs Manual Review based on the currently visible evidence.",
+          summary: "Needs Manual Review readiness; 0/100 merge risk; 0/100 evidence confidence.",
+          primary_reason: null,
+          review_focus: [],
+          priority_files: [],
+          recommended_steps: [],
+          checklist: ["MergeSignal Review Checklist", "PR: octocat/Hello-World#42", "Status: Needs Manual Review"],
+          limitations: ["Human review remains necessary."],
+          provenance: { readiness_reason_ids: [], ci_item_ids: [], signal_ids: [], action_ids: [], file_paths: [], review_thread_ids: [] },
+        },
         merge_readiness: { decision: "needs_manual_review", decisive_rule_id: "readiness.manual", limitations: [] },
         merge_risk: { score: 0, level: "unmapped_level", limitations: [] },
         evidence_confidence: { score: 0, level: "unknown_visibility", components: [], limitations: [] },

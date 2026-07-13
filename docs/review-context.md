@@ -101,6 +101,8 @@ Review-context visibility is independent from CI visibility and evidence confide
 
 Review-context warnings and concern lifecycle states do not automatically change merge risk, evidence confidence, or merge readiness in this milestone.
 
+The Review Briefing can surface current concern lifecycle states as reviewer focus items. Outdated conversations are preserved as historical context but are not treated as active briefing focus by themselves.
+
 ## Current Limitation
 
 GitHub's REST review and review-comment endpoints do not expose true review-thread resolution state. MergeSignal therefore reports attention states and observable provenance, but does not label conversations formally resolved or unresolved. See [Review Concerns](review-concerns.md) for the lifecycle contract.

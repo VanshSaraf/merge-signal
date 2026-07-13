@@ -11,6 +11,8 @@ Snapshot responses include:
 - `review_actions`: deduplicated review prompts with priority, category, related signals, related readiness rules, affected files, safe evidence, and limitations.
 - `review_action_summary`: counts by priority and category, affected-file count, high-priority action count, rule version, and limitations.
 
+The Review Briefing may reuse selected actions as recommended steps, but it does not convert every action into a focus item.
+
 ## Priorities And Categories
 
 Priorities are `high`, `medium`, and `low`.

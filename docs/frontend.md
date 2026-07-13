@@ -13,7 +13,7 @@ The page is organized around focused modules:
 - `src/components/layout/`: application header and pull-request report shell.
 - `src/components/landing/`: landing hero, command-style PR input, evidence pipeline schematic, capability overview, and trust boundaries.
 - `src/components/analysis/`: loading state and the analysis dashboard shell.
-- `src/components/report/`: report navigation, overview, ranked files, review conversations, review-concern lifecycle, review signals, review actions, evidence, filters, score breakdowns, and file detail drawer.
+- `src/components/report/`: report navigation, Review Briefing, overview, ranked files, review conversations, review-concern lifecycle, review signals, review actions, evidence, filters, score breakdowns, and file detail drawer.
 - `src/components/common/`: reusable card, badge, skeleton, and error components.
 - `src/hooks/useReportFilters.js`: derived client-side filtering and sorting for the existing snapshot payload.
 - `src/utils/`: formatting, status-tone, and report helper utilities.
@@ -78,6 +78,7 @@ Most surfaces use small or medium radii, subtle borders, restrained shadows, and
 
 The current UI is a detailed snapshot report. It shows:
 
+- Review Briefing as the first Overview section, with verdict, headline, focus items, recommended steps, priority files, copyable checklist, and safe links when available
 - repository and PR metadata
 - readiness, risk, confidence, and CI status
 - compact CI surface intelligence with passing, failing, pending, and unknown counts
@@ -93,7 +94,7 @@ The current UI is a detailed snapshot report. It shows:
 
 The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. The file detail drawer shows classification evidence, file context, change magnitude, previous-path classification for renames when available, priority factors, related signal IDs, related review conversations, and limitations; it does not show raw patches. Technical factor IDs remain inside disclosure controls.
 
-It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, formal review-thread resolution detection, generated fixes, or GitHub publishing.
+It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, formal review-thread resolution detection, generated fixes, semantic code understanding, or GitHub publishing.
 
 ## Accessibility And Responsiveness
 

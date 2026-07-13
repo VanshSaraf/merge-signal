@@ -37,6 +37,7 @@ from app.readiness import calculate_merge_readiness
 from app.review_actions import build_review_actions
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.file_classifier import classify_changed_files
+from app.services.review_briefing import build_review_briefing
 from app.signals.engine import analyze_snapshot_signals
 
 
@@ -209,12 +210,13 @@ def make_snapshot(reference: PullRequestReference) -> PullRequestSnapshot:
         }
     )
     review_actions, review_action_summary = build_review_actions(snapshot)
-    return snapshot.model_copy(
+    snapshot = snapshot.model_copy(
         update={
             "review_actions": review_actions,
             "review_action_summary": review_action_summary,
         }
     )
+    return snapshot.model_copy(update={"review_briefing": build_review_briefing(snapshot)})
 
 
 class FakeGitHubClient:

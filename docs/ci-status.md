@@ -48,6 +48,10 @@ Commit statuses are already reduced to the current status per context by CI aggr
 
 If one CI surface is unavailable, MergeSignal still returns the observed surface and marks visibility as partial. Partial visibility affects evidence confidence and review actions; it does not invent missing provider results.
 
+## Review Briefing
+
+The Review Briefing uses `ci_explanation.blocking_items` to identify specific blocking surfaces in the headline, focus list, and recommended steps. It uses the existing safe `details_url` when available and does not infer required checks or missing CI providers.
+
 ## Example
 
 For a pull request with two passing GitHub Actions check runs and a failing Vercel commit status that says `Authorization required to deploy.`, MergeSignal reports:

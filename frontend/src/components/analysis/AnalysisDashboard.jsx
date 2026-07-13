@@ -17,7 +17,7 @@ export function AnalysisDashboard({ snapshot }) {
     <div className="dashboard report-workspace" aria-live="polite">
       <ReportShell snapshot={snapshot} activeSection={activeSection} onSectionChange={setActiveSection}>
         <div role="tabpanel" id={`report-panel-${activeSection}`} aria-labelledby={`report-tab-${activeSection}`} className="report-panel" tabIndex={0}>
-          {activeSection === "overview" && <OverviewSection snapshot={snapshot} />}
+          {activeSection === "overview" && <OverviewSection snapshot={snapshot} onNavigate={setActiveSection} />}
           {activeSection === "files" && (
             <FilesSection
               files={snapshot.ranked_files ?? []}

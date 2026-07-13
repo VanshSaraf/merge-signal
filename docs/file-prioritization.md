@@ -58,6 +58,8 @@ The final file score is the sum of applied factor points after group caps, bound
 
 Review-concern factors use only already-collected review-context evidence. Author-claimed-addressed concerns add verification weight; they are not treated as resolved. Global CI failures do not inflate every file unless a file-specific relationship is observable.
 
+The Review Briefing uses the top ranked files and strongest file-priority reasons to produce concise priority-file guidance. File priority remains a review-ordering heuristic and does not become merge risk.
+
 ## Ordering
 
 Files are ordered by score descending, priority level descending, changed-line count descending, current path case-insensitively, then current path. Ranks are stable and 1-based.

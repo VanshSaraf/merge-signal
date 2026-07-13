@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
@@ -5,9 +7,10 @@ import { safeHttpUrl } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { ScoreBreakdown } from "./ScoreBreakdown.jsx";
 
-export function OverviewSection({ snapshot }) {
+export function OverviewSection({ snapshot, onNavigate }) {
   return (
     <div className="report-section">
+      <ReviewBriefing snapshot={snapshot} onNavigate={onNavigate} />
       <ReadinessStatement snapshot={snapshot} />
       <ReviewNext snapshot={snapshot} />
       <ReviewContextSummary snapshot={snapshot} />
@@ -23,6 +26,115 @@ export function OverviewSection({ snapshot }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function ReviewBriefing({ snapshot, onNavigate }) {
+  const briefing = snapshot.review_briefing;
+  const [copyState, setCopyState] = useState("");
+  if (!briefing) return null;
+  const primaryUrl = safeHttpUrl(briefing.primary_reason?.url);
+  const firstFileUrl = safeHttpUrl(briefing.priority_files?.[0]?.url);
+  const firstConversation = (briefing.review_focus ?? []).find((item) => item.source_type === "review_concern");
+  const conversationUrl = safeHttpUrl(firstConversation?.url);
+
+  async function copyChecklist() {
+    try {
+      await navigator.clipboard.writeText((briefing.checklist ?? []).join("\n"));
+      setCopyState("Checklist copied");
+    } catch {
+      setCopyState("Checklist copy failed");
+    }
+  }
+
+  return (
+    <section className="review-briefing" aria-label="Review briefing">
+      <div className="review-briefing__header">
+        <div>
+          <p className="eyebrow">Review briefing</p>
+          <h2>{briefing.headline}</h2>
+          <p>{briefing.summary}</p>
+        </div>
+        <Badge tone={toneForLevel(briefing.status)}>{titleCase(briefing.status)}</Badge>
+      </div>
+      {briefing.primary_reason && (
+        <div className="briefing-primary">
+          <strong>{briefing.primary_reason.title}</strong>
+          <span>{titleCase(briefing.primary_reason.category)} · {titleCase(briefing.primary_reason.severity)}</span>
+        </div>
+      )}
+      <div className="briefing-columns">
+        <BriefingList title="Review focus" items={briefing.review_focus ?? []} />
+        <BriefingSteps steps={briefing.recommended_steps ?? []} />
+      </div>
+      <div className="briefing-files">
+        <h3>Priority files</h3>
+        {(briefing.priority_files ?? []).length > 0 ? (
+          <ol>
+            {briefing.priority_files.map((file) => (
+              <li key={file.path}>
+                <strong>#{file.rank} {file.path}</strong>
+                <span>{file.score}/100 · {titleCase(file.level)}</span>
+                {file.reasons?.length > 0 && <small>{file.reasons.slice(0, 2).join(" · ")}</small>}
+              </li>
+            ))}
+          </ol>
+        ) : <p className="muted">No priority files were available.</p>}
+      </div>
+      <div className="briefing-actions" aria-label="Briefing actions">
+        {primaryUrl && <a className="button button--secondary" href={primaryUrl} target="_blank" rel="noreferrer">Open blocking check</a>}
+        {conversationUrl && <a className="button button--secondary" href={conversationUrl} target="_blank" rel="noreferrer">Open review conversation</a>}
+        {firstFileUrl && <a className="button button--secondary" href={firstFileUrl} target="_blank" rel="noreferrer">Open top file</a>}
+        {!conversationUrl && briefing.review_focus?.some((item) => item.source_type === "review_concern") && <button className="button button--secondary" type="button" onClick={() => onNavigate?.("reviews")}>View reviews</button>}
+        <button className="button button--primary" type="button" onClick={copyChecklist}>Copy review checklist</button>
+        {copyState && <span role="status">{copyState}</span>}
+      </div>
+      <details className="mini-list">
+        <summary>Technical briefing provenance</summary>
+        <ul>
+          {briefing.provenance?.readiness_reason_ids?.map((id) => <li key={id}><code>{id}</code></li>)}
+          {briefing.provenance?.ci_item_ids?.map((id) => <li key={id}><code>{id}</code></li>)}
+          {briefing.provenance?.review_thread_ids?.map((id) => <li key={id}><code>{id}</code></li>)}
+          {briefing.provenance?.signal_ids?.map((id) => <li key={id}><code>{id}</code></li>)}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
+function BriefingList({ title, items }) {
+  return (
+    <section>
+      <h3>{title}</h3>
+      {items.length > 0 ? (
+        <ol>
+          {items.map((item) => (
+            <li key={`${item.title}-${item.provenance?.join("-")}`}>
+              <strong>{item.title}</strong>
+              <span>{item.description}</span>
+            </li>
+          ))}
+        </ol>
+      ) : <p className="muted">No active focus items.</p>}
+    </section>
+  );
+}
+
+function BriefingSteps({ steps }) {
+  return (
+    <section>
+      <h3>Recommended steps</h3>
+      {steps.length > 0 ? (
+        <ol>
+          {steps.map((step) => (
+            <li key={`${step.order}-${step.title}`}>
+              <strong>{step.title}</strong>
+              <span>{step.description}</span>
+            </li>
+          ))}
+        </ol>
+      ) : <p className="muted">No recommended steps were generated.</p>}
+    </section>
   );
 }
 

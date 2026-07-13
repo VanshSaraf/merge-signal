@@ -20,6 +20,15 @@ SNAPSHOT_FIELDS = {
     "evidence_confidence",
     "ranked_files",
     "review_actions",
+    "review_briefing",
+}
+REVIEW_BRIEFING_FIELDS = {
+    "status",
+    "headline",
+    "review_focus",
+    "priority_files",
+    "recommended_steps",
+    "checklist",
 }
 
 
@@ -94,6 +103,17 @@ def check_snapshot(base_url: str, pull_request_url: str, timeout: float) -> Smok
     missing = sorted(SNAPSHOT_FIELDS - set(data))
     if missing:
         return SmokeResult(False, "snapshot", "missing fields: " + ", ".join(missing))
+
+    briefing = data.get("review_briefing")
+    if not isinstance(briefing, dict):
+        return SmokeResult(False, "snapshot", "review_briefing was not an object")
+    missing_briefing = sorted(REVIEW_BRIEFING_FIELDS - set(briefing))
+    if missing_briefing:
+        return SmokeResult(
+            False,
+            "snapshot",
+            "review_briefing missing fields: " + ", ".join(missing_briefing),
+        )
     return SmokeResult(True, "snapshot", "required report fields present")
 
 

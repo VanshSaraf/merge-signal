@@ -1,5 +1,3 @@
-const LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
-
 export function resolveApiBaseUrl(env = import.meta.env) {
   const rawValue = env.VITE_API_BASE_URL?.trim();
   const isProduction = env.PROD === true || env.MODE === "production";
@@ -8,12 +6,12 @@ export function resolveApiBaseUrl(env = import.meta.env) {
     if (isProduction) {
       throw new Error("VITE_API_BASE_URL is required for production builds.");
     }
-    return LOCAL_API_BASE_URL;
+    return developmentApiBaseUrl();
   }
 
   const normalized = normalizeApiBaseUrl(rawValue);
-  if (isProduction && isLocalhostUrl(normalized)) {
-    throw new Error("VITE_API_BASE_URL must not point to localhost in production.");
+  if (isProduction) {
+    validateProductionApiBaseUrl(normalized);
   }
   return normalized;
 }
@@ -42,4 +40,34 @@ function isLocalhostUrl(value) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-export const API_BASE_URL = resolveApiBaseUrl();
+function developmentApiBaseUrl() {
+  return "http://127.0.0.1:8000";
+}
+
+function resolveRuntimeApiBaseUrl() {
+  if (import.meta.env.PROD) {
+    return resolveProductionApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+  }
+  return resolveApiBaseUrl(import.meta.env);
+}
+
+function resolveProductionApiBaseUrl(rawValue) {
+  if (!rawValue?.trim()) {
+    throw new Error("VITE_API_BASE_URL is required for production builds.");
+  }
+  const normalized = normalizeApiBaseUrl(rawValue);
+  validateProductionApiBaseUrl(normalized);
+  return normalized;
+}
+
+function validateProductionApiBaseUrl(value) {
+  const url = new URL(value);
+  if (isLocalhostUrl(value)) {
+    throw new Error("VITE_API_BASE_URL must not point to localhost in production.");
+  }
+  if (url.protocol !== "https:") {
+    throw new Error("VITE_API_BASE_URL must use https in production.");
+  }
+}
+
+export const API_BASE_URL = resolveRuntimeApiBaseUrl();

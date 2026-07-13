@@ -32,7 +32,7 @@ MergeSignal is prepared for manual deployment with the backend on Render and the
 | Backend | `GITHUB_MAX_PAGES` | No | Existing GitHub pagination safety bound. |
 | Backend | `GITHUB_USER_AGENT` | No | User-Agent sent to GitHub. |
 | Backend | `PORT` | Provider-managed | Render supplies this automatically; `render.yaml` binds Uvicorn to `$PORT`. |
-| Frontend | `VITE_API_BASE_URL` | Yes in production | Base URL of the deployed backend. Do not include secrets. |
+| Frontend | `VITE_API_BASE_URL` | Yes in production | HTTPS base URL of the deployed backend. Do not include secrets. |
 
 ## Render Backend
 
@@ -44,7 +44,7 @@ In production, `MERGE_SIGNAL_CORS_ORIGINS` must contain exact frontend origins, 
 
 Set the Vercel project root to `frontend`. `frontend/vercel.json` runs `npm run build`, serves `dist`, and rewrites routes to `index.html` for React Router client-side navigation.
 
-Production builds must have `VITE_API_BASE_URL` configured. Local development may omit it and use the localhost backend fallback.
+Production builds must have `VITE_API_BASE_URL` configured with an HTTPS backend URL. The localhost backend fallback exists only in development and is excluded from production bundles.
 
 ## Smoke Test
 
@@ -55,7 +55,7 @@ python scripts/smoke_deployment.py https://backend.example.com \
   --pull-request-url https://github.com/owner/repository/pull/123
 ```
 
-The script checks `/health`, `/openapi.json`, and optionally the snapshot endpoint. It prints concise pass/fail lines and does not print tokens or full response bodies.
+The script checks `/health`, `/openapi.json`, and optionally the snapshot endpoint, including the production `review_briefing` fields. It prints concise pass/fail lines and does not print tokens or full response bodies.
 
 ## Rate Limits
 

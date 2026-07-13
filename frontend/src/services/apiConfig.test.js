@@ -19,6 +19,16 @@ describe("apiConfig", () => {
     expect(normalizeApiBaseUrl("https://api.example.com///")).toBe("https://api.example.com");
   });
 
+  it("accepts and normalizes valid production API URLs", () => {
+    expect(
+      resolveApiBaseUrl({
+        MODE: "production",
+        PROD: true,
+        VITE_API_BASE_URL: "https://api.example.com///",
+      }),
+    ).toBe("https://api.example.com");
+  });
+
   it("rejects malformed API base URLs safely", () => {
     expect(() => normalizeApiBaseUrl("not a url")).toThrow(/valid absolute URL/i);
     expect(() => normalizeApiBaseUrl("ftp://api.example.com")).toThrow(/http or https/i);
@@ -33,6 +43,16 @@ describe("apiConfig", () => {
         VITE_API_BASE_URL: "http://localhost:8000",
       }),
     ).toThrow(/localhost/i);
+  });
+
+  it("rejects non-HTTPS production API URLs", () => {
+    expect(() =>
+      resolveApiBaseUrl({
+        MODE: "production",
+        PROD: true,
+        VITE_API_BASE_URL: "http://api.example.com",
+      }),
+    ).toThrow(/https/i);
   });
 
   it("keeps the Vercel SPA fallback configured", () => {

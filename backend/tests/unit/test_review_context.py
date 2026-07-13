@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.domain.pull_request import (
     ReviewCommentRecord,
+    ReviewConcernAttentionState,
     PullRequestReviewRecord,
     ReviewState,
 )
@@ -42,6 +43,8 @@ def comment(
     in_reply_to_id: int | None = None,
     path: str = "backend/app/main.py",
     line: int | None = 12,
+    current_position: int | None = 3,
+    original_position: int | None = 3,
     html_url: str | None = None,
 ) -> ReviewCommentRecord:
     return ReviewCommentRecord(
@@ -58,6 +61,8 @@ def comment(
         start_line=None,
         side="RIGHT",
         start_side=None,
+        current_position=current_position,
+        original_position=original_position,
         commit_sha="abc123",
     )
 
@@ -169,3 +174,169 @@ def test_partial_and_unavailable_visibility_are_exposed() -> None:
 
     assert partial.visibility == "partial"
     assert unavailable.visibility == "unavailable"
+
+
+def test_awaiting_author_response_when_reviewer_root_has_no_author_reply() -> None:
+    context = build_review_context(
+        [],
+        [comment(30, "reviewer", "Can you adjust this?")],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="abc123",
+    )
+
+    lifecycle = context.threads[0].lifecycle
+    assert lifecycle.attention_state == ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE
+    assert lifecycle.needs_attention is True
+    assert lifecycle.has_author_reply is False
+
+
+def test_author_reply_and_author_claimed_addressed_are_distinct_with_boundaries() -> None:
+    author_replied = build_review_context(
+        [],
+        [
+            comment(40, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(41, "octocat", "I can look at this soon.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=40),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+    claimed = build_review_context(
+        [],
+        [
+            comment(42, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(43, "octocat", "Pushed a fix for this.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=42),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+    false_positive = build_review_context(
+        [],
+        [
+            comment(44, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(45, "octocat", "The prefix changed.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=44),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert author_replied.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
+    assert author_replied.threads[0].lifecycle.needs_attention is False
+    assert claimed.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED
+    assert claimed.threads[0].lifecycle.verification_needed is True
+    assert false_positive.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
+
+
+def test_reviewer_follow_up_takes_priority_after_author_claim() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(50, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(51, "octocat", "Fixed.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=50),
+            comment(52, "reviewer", "There is still one issue.", created_at=BASE_TIME + timedelta(minutes=2), in_reply_to_id=50),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    lifecycle = context.threads[0].lifecycle
+    assert lifecycle.attention_state == ReviewConcernAttentionState.REVIEWER_FOLLOW_UP
+    assert lifecycle.has_reviewer_follow_up is True
+    assert lifecycle.author_claimed_addressed is False
+
+
+def test_outdated_requires_reliable_position_metadata_and_author_root_is_informational() -> None:
+    outdated = build_review_context(
+        [],
+        [comment(60, "reviewer", "Old position", current_position=None, original_position=7)],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+    force_push_unknown = build_review_context(
+        [],
+        [comment(61, "reviewer", "No reliable outdated metadata", current_position=7, original_position=7)],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="new-head",
+    )
+    informational = build_review_context(
+        [],
+        [comment(62, "octocat", "Note to self")],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert outdated.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.OUTDATED
+    assert outdated.threads[0].lifecycle.needs_attention is False
+    assert force_push_unknown.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE
+    assert informational.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.INFORMATIONAL
+
+
+def test_latest_review_state_and_stale_approval_summary() -> None:
+    context = build_review_context(
+        [
+            review(70, "reviewer", ReviewState.CHANGES_REQUESTED, BASE_TIME, body="Needs changes."),
+            review(71, "reviewer", ReviewState.APPROVED, BASE_TIME + timedelta(minutes=2), body="Approved."),
+            review(72, "alice", ReviewState.APPROVED, BASE_TIME + timedelta(minutes=3), body="Looks good."),
+            review(73, "bob", ReviewState.CHANGES_REQUESTED, BASE_TIME + timedelta(minutes=4), body="Needs changes."),
+        ],
+        [comment(74, "bob", "Please fix this.")],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="different-head",
+    )
+
+    latest = {state.reviewer_login: state.state for state in context.latest_reviewer_states}
+    assert latest["reviewer"] == ReviewState.APPROVED
+    assert context.concern_summary.active_latest_change_request_count == 1
+    assert context.concern_summary.potentially_stale_approval_count == 2
+    assert context.threads[0].lifecycle.active_latest_change_request is True
+
+
+def test_lifecycle_summary_counts_and_provenance_are_thread_scoped() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(80, "reviewer", "First", created_at=BASE_TIME),
+            comment(81, "octocat", "Done.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=80),
+            comment(82, "reviewer", "Second", created_at=BASE_TIME + timedelta(minutes=2)),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert context.concern_summary.author_claimed_addressed_count == 1
+    assert context.concern_summary.awaiting_author_response_count == 1
+    assert "2 review conversations need attention" in context.concern_summary.summary
+    first_thread_comment_ids = {fact.comment_id for fact in context.threads[0].lifecycle.provenance if fact.comment_id}
+    assert first_thread_comment_ids <= {80, 81}

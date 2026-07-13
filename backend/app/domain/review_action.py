@@ -26,6 +26,7 @@ class ReviewActionCategory(StrEnum):
     CODE_QUALITY = "code_quality"
     EVIDENCE_VISIBILITY = "evidence_visibility"
     FILE_REVIEW = "file_review"
+    REVIEW = "review"
 
 
 class ReviewAction(StrictReviewActionModel):

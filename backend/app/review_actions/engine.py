@@ -1,4 +1,4 @@
-from app.domain.pull_request import CiState, CiVisibility, PullRequestSnapshot
+from app.domain.pull_request import CiState, CiVisibility, PullRequestSnapshot, ReviewConcernAttentionState, ReviewThreadRecord
 from app.domain.review_action import ReviewAction, ReviewActionSummary
 from app.domain.review_signal import ReviewSignal
 from app.domain.scoring import ConfidenceComponentStatus
@@ -59,6 +59,7 @@ def build_review_actions(snapshot: PullRequestSnapshot) -> tuple[list[ReviewActi
         *_security_actions(signals_by_rule, reasons_by_rule, ranked_positions),
         *_database_actions(signals_by_rule, reasons_by_rule, ranked_positions),
         *_testing_actions(signals_by_rule, reasons_by_rule, ranked_positions),
+        *_review_concern_actions(snapshot, ranked_positions),
         *_medium_signal_actions(signals_by_rule, ranked_positions),
         *_incomplete_evidence_actions(snapshot, signals_by_rule, reasons_by_rule, ranked_positions),
         *_low_signal_actions(signals_by_rule, ranked_positions),
@@ -137,6 +138,50 @@ def _ci_actions(
             )
         )
     return actions
+
+
+def _review_concern_actions(
+    snapshot: PullRequestSnapshot,
+    ranked_positions: dict[str, int],
+) -> list[ReviewAction]:
+    actions: list[ReviewAction] = []
+    for thread in snapshot.review_context.threads:
+        rule_id = _review_concern_rule_id(thread)
+        if rule_id is None:
+            continue
+        evidence = [
+            thread.lifecycle.summary,
+            "MergeSignal cannot verify that the code change resolves this concern.",
+            f"Conversation: {thread.id}.",
+        ]
+        if thread.html_url:
+            evidence.append(f"Details URL: {thread.html_url}")
+        if thread.root_comment.reviewer_login:
+            evidence.append(f"Root commenter: {thread.root_comment.reviewer_login}.")
+        actions.append(
+            _action(
+                rule_id,
+                [],
+                [],
+                evidence,
+                ranked_positions,
+                affected_files=[thread.path] if thread.path else [],
+                action_id=f"{rule_id}.{thread.root_comment_id}",
+            )
+        )
+    return actions
+
+
+def _review_concern_rule_id(thread: ReviewThreadRecord) -> str | None:
+    if thread.lifecycle.has_reviewer_follow_up:
+        return "action.review_concern.reviewer_follow_up"
+    if thread.lifecycle.active_latest_change_request:
+        return "action.review_concern.active_change_request"
+    if thread.lifecycle.attention_state == ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE:
+        return "action.review_concern.awaiting_author_response"
+    if thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED:
+        return "action.review_concern.verify_author_claim"
+    return None
 
 
 def _ci_failure_action_evidence(snapshot: PullRequestSnapshot) -> list[str]:
@@ -346,11 +391,12 @@ def _action(
     ranked_positions: dict[str, int],
     *,
     affected_files: list[str] | None = None,
+    action_id: str | None = None,
 ) -> ReviewAction:
     rule = RULE_BY_ID[rule_id]
     files = affected_files if affected_files is not None else [path for signal in signals for path in signal.affected_files]
     return ReviewAction(
-        id=rule.rule_id,
+        id=action_id or rule.rule_id,
         rule_id=rule.rule_id,
         title=rule.title,
         description=rule.description,
@@ -369,11 +415,12 @@ def _deduplicate_actions(actions: list[ReviewAction]) -> list[ReviewAction]:
     for action in actions:
         if not _has_evidence(action):
             continue
-        existing = by_rule.get(action.rule_id)
+        key = action.id
+        existing = by_rule.get(key)
         if existing is None:
-            by_rule[action.rule_id] = action
+            by_rule[key] = action
             continue
-        by_rule[action.rule_id] = action.model_copy(
+        by_rule[key] = action.model_copy(
             update={
                 "affected_files": unique_file_ordered([*existing.affected_files, *action.affected_files], {}),
                 "related_signal_ids": unique_sorted([*existing.related_signal_ids, *action.related_signal_ids]),

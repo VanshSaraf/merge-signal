@@ -21,6 +21,7 @@ CATEGORY_ORDER = MappingProxyType({
     ReviewActionCategory.CODE_QUALITY: 9,
     ReviewActionCategory.EVIDENCE_VISIBILITY: 10,
     ReviewActionCategory.FILE_REVIEW: 11,
+    ReviewActionCategory.REVIEW: 12,
 })
 
 

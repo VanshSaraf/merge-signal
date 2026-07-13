@@ -120,6 +120,20 @@ function snapshotResponse(overrides = {}) {
       commented_count: 0,
       dismissed_count: 0,
       pending_count: 0,
+      concern_summary: {
+        total_conversations: 1,
+        needing_attention_count: 1,
+        awaiting_author_response_count: 0,
+        author_replied_count: 0,
+        author_claimed_addressed_count: 1,
+        reviewer_follow_up_count: 0,
+        outdated_count: 0,
+        informational_count: 0,
+        unknown_count: 0,
+        active_latest_change_request_count: 1,
+        potentially_stale_approval_count: 0,
+        summary: "1 review conversation needs attention; author says 1 concern addressed; 1 latest change request.",
+      },
       latest_reviewer_states: [
         { reviewer_login: "alice", state: "approved", review_id: 501, submitted_at: "2026-07-13T10:00:00Z" },
         { reviewer_login: "bob", state: "changes_requested", review_id: 502, submitted_at: "2026-07-13T10:05:00Z" },
@@ -139,6 +153,24 @@ function snapshotResponse(overrides = {}) {
           start_side: null,
           html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r601",
           is_orphan_reply: false,
+          lifecycle: {
+            attention_state: "author_claimed_addressed",
+            needs_attention: true,
+            verification_needed: true,
+            has_author_reply: true,
+            has_reviewer_follow_up: false,
+            author_claimed_addressed: true,
+            is_outdated: false,
+            resolution_visibility: "unavailable",
+            active_latest_change_request: true,
+            approval_validity: "unknown",
+            summary: "The author claims this concern was addressed; reviewer confirmation is not visible.",
+            provenance: [
+              { source: "root_comment", comment_id: 601, review_id: 502, actor_login: "bob", observed_at: "2026-07-13T10:06:00Z", detail: "Root inline review comment for this conversation." },
+              { source: "author_claim", comment_id: 602, review_id: 502, actor_login: "octocat", observed_at: "2026-07-13T10:07:00Z", detail: "Author reply matched bounded addressed-claim language." },
+            ],
+            limitations: ["MergeSignal cannot verify that the code change resolves this concern."],
+          },
           participant_logins: ["bob", "octocat"],
           root_comment: {
             id: 601,
@@ -154,13 +186,15 @@ function snapshotResponse(overrides = {}) {
             start_line: null,
             side: "RIGHT",
             start_side: null,
+            current_position: 3,
+            original_position: 3,
             commit_sha: "head",
           },
           replies: [
             {
               id: 602,
               reviewer_login: "octocat",
-              body_excerpt: "Good catch, I will revise this.",
+              body_excerpt: "Fixed.",
               created_at: "2026-07-13T10:07:00Z",
               updated_at: "2026-07-13T10:07:00Z",
               html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r602",
@@ -171,6 +205,8 @@ function snapshotResponse(overrides = {}) {
               start_line: null,
               side: "RIGHT",
               start_side: null,
+              current_position: 3,
+              original_position: 3,
               commit_sha: "head",
             },
           ],
@@ -308,6 +344,23 @@ function snapshotResponse(overrides = {}) {
         limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
       {
+        id: "action.review_concern.active_change_request.601",
+        rule_id: "action.review_concern.active_change_request",
+        title: "Address the reviewer's latest change request",
+        description: "Review the conversation associated with a reviewer whose latest observable state requests changes.",
+        priority: "high",
+        category: "review",
+        affected_files: ["backend/app/security/secrets.py"],
+        related_signal_ids: [],
+        related_readiness_rule_ids: [],
+        evidence: [
+          "The author claims this concern was addressed; reviewer confirmation is not visible.",
+          "MergeSignal cannot verify that the code change resolves this concern.",
+          "Details URL: https://github.com/octocat/Hello-World/pull/42#discussion_r601",
+        ],
+        limitations: ["Readiness is not automatically blocked by review state in this milestone."],
+      },
+      {
         id: "action.review_highest_priority_files",
         rule_id: "action.review_highest_priority_files",
         title: "Review highest-priority files",
@@ -322,7 +375,7 @@ function snapshotResponse(overrides = {}) {
       },
     ],
     file_priority_summary: { limitations: ["A low-priority file must not be ignored."] },
-    review_action_summary: { total_actions: 2, limitations: ["Actions are deterministic review prompts, not AI commentary."] },
+    review_action_summary: { total_actions: 3, limitations: ["Actions are deterministic review prompts, not AI commentary."] },
     completeness: {
       files_complete: true,
       commits_complete: true,
@@ -338,6 +391,56 @@ function okSnapshot(payload = snapshotResponse()) {
     ok: true,
     json: () => Promise.resolve({ data: payload }),
   });
+}
+
+function threadFixture(id, lifecycle, overrides = {}) {
+  const rootComment = {
+    id,
+    reviewer_login: overrides.reviewer_login ?? "reviewer",
+    body_excerpt: overrides.body_excerpt ?? "Please look at this concern.",
+    created_at: `2026-07-13T10:${String(id).slice(-2)}:00Z`,
+    updated_at: null,
+    html_url: `https://github.com/octocat/Hello-World/pull/42#discussion_r${id}`,
+    pull_request_review_id: overrides.review_id ?? 700,
+    in_reply_to_id: null,
+    path: overrides.path ?? "backend/app/main.py",
+    line: overrides.line ?? 12,
+    start_line: null,
+    side: "RIGHT",
+    start_side: null,
+    current_position: Object.hasOwn(overrides, "current_position") ? overrides.current_position : 3,
+    original_position: Object.hasOwn(overrides, "original_position") ? overrides.original_position : 3,
+    commit_sha: "head",
+  };
+  return {
+    id: `review-thread-${id}`,
+    root_comment_id: id,
+    path: rootComment.path,
+    line: rootComment.line,
+    start_line: null,
+    side: "RIGHT",
+    start_side: null,
+    html_url: overrides.html_url ?? rootComment.html_url,
+    is_orphan_reply: false,
+    lifecycle: {
+      attention_state: lifecycle,
+      needs_attention: ["awaiting_author_response", "reviewer_follow_up"].includes(lifecycle),
+      verification_needed: lifecycle === "author_claimed_addressed",
+      has_author_reply: ["author_replied", "author_claimed_addressed", "reviewer_follow_up"].includes(lifecycle),
+      has_reviewer_follow_up: lifecycle === "reviewer_follow_up",
+      author_claimed_addressed: lifecycle === "author_claimed_addressed",
+      is_outdated: lifecycle === "outdated",
+      resolution_visibility: "unavailable",
+      active_latest_change_request: overrides.active_latest_change_request ?? false,
+      approval_validity: "unknown",
+      summary: overrides.summary ?? "Lifecycle summary fixture.",
+      provenance: [{ source: "root_comment", comment_id: id, review_id: rootComment.pull_request_review_id, actor_login: rootComment.reviewer_login, observed_at: rootComment.created_at, detail: "Root inline review comment for this conversation." }],
+      limitations: ["MergeSignal cannot verify that the code change resolves this concern."],
+    },
+    participant_logins: overrides.participant_logins ?? [rootComment.reviewer_login, "octocat"],
+    root_comment: rootComment,
+    replies: overrides.replies ?? [],
+  };
 }
 
 function renderApp() {
@@ -625,26 +728,153 @@ describe("App", () => {
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
     await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
-    expect(await screen.findByLabelText("Review context summary")).toHaveTextContent("1 approval");
-    expect(screen.getByLabelText("Review context summary")).toHaveTextContent("1 change request");
+    expect(await screen.findByLabelText("Review context summary")).toHaveTextContent("1 review conversation needs attention");
+    expect(screen.getByLabelText("Review context summary")).toHaveTextContent("1 reviewer currently requests changes");
     await user.click(screen.getByRole("tab", { name: "Reviews (1)" }));
 
-    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Submitted reviews");
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Needs attention");
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Author says addressed");
     expect(screen.getByLabelText("Latest observable reviewer states")).toHaveTextContent("alice");
     expect(screen.getByLabelText("Latest observable reviewer states")).toHaveTextContent("Changes Requested");
+    expect(screen.getAllByText("Author says addressed").length).toBeGreaterThan(0);
     expect(screen.getByText("backend/app/security/secrets.py:L42")).toBeInTheDocument();
     expect(screen.getByText("Can we avoid storing password=[REDACTED] here?")).toBeInTheDocument();
     expect(screen.queryByText("review-thread-601")).not.toBeInTheDocument();
     expect(screen.queryByText(/hunter2|api_key|<b>/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "View conversation" }));
-    expect(screen.getByText("Good catch, I will revise this.")).toBeInTheDocument();
+    expect(screen.getByText("The author claims this concern was addressed; reviewer confirmation is not visible.")).toBeInTheDocument();
+    expect(screen.getByText("MergeSignal cannot verify that the code change resolves this concern.")).toBeInTheDocument();
+    expect(screen.getByText("Fixed.")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Open on GitHub" }).some((link) => link.getAttribute("href") === "https://github.com/octocat/Hello-World/pull/42#discussion_r601")).toBe(true);
     const technicalDetails = screen.getByText("Technical details").closest("details");
     expect(technicalDetails).not.toHaveAttribute("open");
     await user.click(screen.getByText("Technical details"));
     expect(technicalDetails).toHaveAttribute("open");
     expect(screen.getByText("review-thread-601")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
+    expect(screen.getByText("Address the reviewer's latest change request")).toBeInTheDocument();
+  });
+
+  it("renders multiple review concern lifecycle states and preserves keyboard expansion", async () => {
+    const user = userEvent.setup();
+    const threads = [
+      threadFixture(701, "awaiting_author_response", {
+        body_excerpt: "Can the author clarify the migration behavior?",
+        summary: "This reviewer concern is awaiting an author response.",
+      }),
+      threadFixture(711, "author_replied", {
+        body_excerpt: "Can this branch be simplified?",
+        summary: "The author replied; reviewer acceptance is not visible.",
+        replies: [
+          {
+            id: 712,
+            reviewer_login: "octocat",
+            body_excerpt: "I can update this.",
+            created_at: "2026-07-13T10:12:00Z",
+            updated_at: null,
+            html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r712",
+            pull_request_review_id: 700,
+            in_reply_to_id: 711,
+            path: "backend/app/main.py",
+            line: 12,
+            current_position: 3,
+            original_position: 3,
+          },
+        ],
+      }),
+      threadFixture(721, "reviewer_follow_up", {
+        body_excerpt: "Please handle the null branch.",
+        summary: "A reviewer followed up after the latest author response.",
+        active_latest_change_request: true,
+        replies: [
+          {
+            id: 722,
+            reviewer_login: "octocat",
+            body_excerpt: "Fixed.",
+            created_at: "2026-07-13T10:22:00Z",
+            updated_at: null,
+            html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r722",
+            pull_request_review_id: 700,
+            in_reply_to_id: 721,
+            path: "backend/app/main.py",
+            line: 12,
+            current_position: 3,
+            original_position: 3,
+          },
+          {
+            id: 723,
+            reviewer_login: "reviewer",
+            body_excerpt: "Still seeing this.",
+            created_at: "2026-07-13T10:23:00Z",
+            updated_at: null,
+            html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r723",
+            pull_request_review_id: 700,
+            in_reply_to_id: 721,
+            path: "backend/app/main.py",
+            line: 12,
+            current_position: 3,
+            original_position: 3,
+          },
+        ],
+      }),
+      threadFixture(731, "outdated", {
+        body_excerpt: "This old line changed.",
+        current_position: null,
+        original_position: 8,
+        summary: "GitHub position metadata indicates this conversation is outdated.",
+      }),
+    ];
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshotResponse({
+        review_context: {
+          ...snapshotResponse().review_context,
+          comment_count: 7,
+          thread_count: 4,
+          concern_summary: {
+            total_conversations: 4,
+            needing_attention_count: 2,
+            awaiting_author_response_count: 1,
+            author_replied_count: 1,
+            author_claimed_addressed_count: 0,
+            reviewer_follow_up_count: 1,
+            outdated_count: 1,
+            informational_count: 0,
+            unknown_count: 0,
+            active_latest_change_request_count: 1,
+            potentially_stale_approval_count: 0,
+            summary: "2 review conversations need attention; 1 has a reviewer follow-up.",
+          },
+          threads,
+        },
+      }));
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+    await user.click(await screen.findByRole("tab", { name: "Reviews (4)" }));
+
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Awaiting response");
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Author replied");
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Reviewer follow-up");
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Outdated");
+    expect(screen.getByText("Needs author response")).toBeInTheDocument();
+    expect(screen.getAllByText("Author replied").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reviewer followed up").length).toBeGreaterThan(0);
+    expect(screen.getByText("Outdated conversation")).toBeInTheDocument();
+
+    const followUpButton = screen.getAllByRole("button", { name: "View conversation" })[2];
+    followUpButton.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("A reviewer followed up after the latest author response.")).toBeInTheDocument();
+    expect(screen.getByText("Still seeing this.")).toBeInTheDocument();
+    const technicalDetails = screen.getByText("Technical details").closest("details");
+    expect(technicalDetails).not.toHaveAttribute("open");
   });
 
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
@@ -790,6 +1020,21 @@ describe("App", () => {
         thread_count: 0,
         approved_count: 0,
         changes_requested_count: 0,
+        concern_summary: {
+          ...snapshotResponse().review_context.concern_summary,
+          total_conversations: 0,
+          needing_attention_count: 0,
+          awaiting_author_response_count: 0,
+          author_replied_count: 0,
+          author_claimed_addressed_count: 0,
+          reviewer_follow_up_count: 0,
+          outdated_count: 0,
+          informational_count: 0,
+          unknown_count: 0,
+          active_latest_change_request_count: 0,
+          potentially_stale_approval_count: 0,
+          summary: "No inline review conversations were observed.",
+        },
         latest_reviewer_states: [],
         reviews: [],
         threads: [],
@@ -869,6 +1114,21 @@ describe("App", () => {
           thread_count: 0,
           approved_count: 0,
           changes_requested_count: 0,
+          concern_summary: {
+            ...snapshotResponse().review_context.concern_summary,
+            total_conversations: 0,
+            needing_attention_count: 0,
+            awaiting_author_response_count: 0,
+            author_replied_count: 0,
+            author_claimed_addressed_count: 0,
+            reviewer_follow_up_count: 0,
+            outdated_count: 0,
+            informational_count: 0,
+            unknown_count: 0,
+            active_latest_change_request_count: 0,
+            potentially_stale_approval_count: 0,
+            summary: "No inline review conversations were observed.",
+          },
           latest_reviewer_states: [],
           reviews: [],
           threads: [],

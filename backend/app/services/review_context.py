@@ -4,6 +4,9 @@ from urllib.parse import urlparse
 
 from app.domain.pull_request import (
     PullRequestReviewRecord,
+    ReviewConcernAttentionState,
+    ReviewConcernProvenance,
+    ReviewConcernSummary,
     ReviewCommentRecord,
     ReviewContext,
     ReviewContextCompleteness,
@@ -11,6 +14,8 @@ from app.domain.pull_request import (
     ReviewContextVisibility,
     ReviewState,
     ReviewThreadRecord,
+    ReviewThreadLifecycle,
+    ResolutionVisibility,
 )
 
 BODY_EXCERPT_LIMIT = 900
@@ -19,10 +24,13 @@ HTML_TAG_PATTERN = re.compile(r"<[^>\n]{1,200}>")
 CREDENTIAL_VALUE_PATTERN = re.compile(
     r"(?i)\b(password|passwd|secret|api[_-]?key|apikey|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret)\b\s*[:=]\s*([^\s,;]+)"
 )
+AUTHOR_ADDRESSED_PATTERN = re.compile(
+    r"(?i)(\bfixed\b|\baddressed\b|\bupdated\b|\bresolved\b|\bdone\b|\bpushed\s+a\s+fix\b|\bhandled\s+this\b|\bchanged\s+this\b)"
+)
 
 REVIEW_LIMITATIONS = [
     "Review context reports observable GitHub review state only.",
-    "MergeSignal does not determine whether review concerns are resolved in this milestone.",
+    "MergeSignal does not determine whether review concerns are formally resolved in this milestone.",
     "Approvals and change requests may be stale after later commits.",
     "Review comments do not automatically change merge risk or readiness.",
 ]
@@ -36,6 +44,8 @@ def build_review_context(
     comments_complete: bool,
     review_pages_fetched: int,
     comment_pages_fetched: int,
+    pr_author_login: str | None = None,
+    head_sha: str | None = None,
     warnings: list[str] | None = None,
 ) -> ReviewContext:
     comment_records = list(comments)  # type: ignore[arg-type]
@@ -43,9 +53,17 @@ def build_review_context(
         raise TypeError("build_review_context expects normalized review comments, not threads")
     review_items = _dedupe_reviews(reviews)
     comments_items = _dedupe_comments(comment_records)  # type: ignore[arg-type]
-    thread_result = build_review_threads(comments_items)
+    latest_states = _latest_reviewer_states(review_items)
+    thread_result = build_review_threads(
+        comments_items,
+        pr_author_login=pr_author_login,
+        latest_reviewer_states=latest_states,
+        reviews_by_id={review.id: review for review in review_items},
+        head_sha=head_sha,
+    )
     all_warnings = [*(warnings or []), *thread_result.warnings]
     counts = Counter(review.state for review in review_items)
+    concern_summary = _build_concern_summary(thread_result.threads, latest_states, {review.id: review for review in review_items}, head_sha)
 
     if reviews_complete and comments_complete:
         visibility = ReviewContextVisibility.COMPLETE
@@ -72,8 +90,9 @@ def build_review_context(
         commented_count=counts[ReviewState.COMMENTED],
         dismissed_count=counts[ReviewState.DISMISSED],
         pending_count=counts[ReviewState.PENDING],
+        concern_summary=concern_summary,
         reviews=sorted(review_items, key=_review_sort_key),
-        latest_reviewer_states=_latest_reviewer_states(review_items),
+        latest_reviewer_states=latest_states,
         threads=thread_result.threads,
         warnings=all_warnings,
         limitations=REVIEW_LIMITATIONS,
@@ -86,7 +105,14 @@ class ThreadBuildResult:
         self.warnings = warnings
 
 
-def build_review_threads(comments: list[ReviewCommentRecord]) -> ThreadBuildResult:
+def build_review_threads(
+    comments: list[ReviewCommentRecord],
+    *,
+    pr_author_login: str | None = None,
+    latest_reviewer_states: list[ReviewerLatestState] | None = None,
+    reviews_by_id: dict[int, PullRequestReviewRecord] | None = None,
+    head_sha: str | None = None,
+) -> ThreadBuildResult:
     comments = sorted(_dedupe_comments(comments), key=_comment_sort_key)
     by_id = {comment.id: comment for comment in comments}
     root_comments = [comment for comment in comments if comment.in_reply_to_id is None]
@@ -104,10 +130,31 @@ def build_review_threads(comments: list[ReviewCommentRecord]) -> ThreadBuildResu
         root_id = root.id if root.in_reply_to_id is None else root.in_reply_to_id
         replies_by_root.setdefault(root_id, []).append(comment)
 
-    threads = [_thread_from_root(root, replies_by_root.get(root.id, []), is_orphan=False) for root in root_comments]
+    threads = [
+        _thread_from_root(
+            root,
+            replies_by_root.get(root.id, []),
+            is_orphan=False,
+            pr_author_login=pr_author_login,
+            latest_reviewer_states=latest_reviewer_states or [],
+            reviews_by_id=reviews_by_id or {},
+            head_sha=head_sha,
+        )
+        for root in root_comments
+    ]
     for reply in orphan_replies:
         warnings.append(f"Inline review reply {reply.id} referenced unavailable root comment {reply.in_reply_to_id}.")
-        threads.append(_thread_from_root(reply, [], is_orphan=True))
+        threads.append(
+            _thread_from_root(
+                reply,
+                [],
+                is_orphan=True,
+                pr_author_login=pr_author_login,
+                latest_reviewer_states=latest_reviewer_states or [],
+                reviews_by_id=reviews_by_id or {},
+                head_sha=head_sha,
+            )
+        )
     return ThreadBuildResult(sorted(threads, key=_thread_sort_key), warnings)
 
 
@@ -148,9 +195,27 @@ def normalize_review_state(value: str | None) -> ReviewState:
     }.get(normalized, ReviewState.UNKNOWN)
 
 
-def _thread_from_root(root: ReviewCommentRecord, replies: list[ReviewCommentRecord], *, is_orphan: bool) -> ReviewThreadRecord:
+def _thread_from_root(
+    root: ReviewCommentRecord,
+    replies: list[ReviewCommentRecord],
+    *,
+    is_orphan: bool,
+    pr_author_login: str | None,
+    latest_reviewer_states: list[ReviewerLatestState],
+    reviews_by_id: dict[int, PullRequestReviewRecord],
+    head_sha: str | None,
+) -> ReviewThreadRecord:
     ordered_replies = sorted(replies, key=_comment_sort_key)
     participants = sorted({root.reviewer_login, *(reply.reviewer_login for reply in ordered_replies)}, key=str.casefold)
+    lifecycle = _derive_thread_lifecycle(
+        root,
+        ordered_replies,
+        is_orphan=is_orphan,
+        pr_author_login=pr_author_login,
+        latest_reviewer_states=latest_reviewer_states,
+        reviews_by_id=reviews_by_id,
+        head_sha=head_sha,
+    )
     return ReviewThreadRecord(
         id=f"review-thread-{root.id}",
         root_comment_id=root.id,
@@ -164,7 +229,242 @@ def _thread_from_root(root: ReviewCommentRecord, replies: list[ReviewCommentReco
         participant_logins=participants,
         html_url=root.html_url,
         is_orphan_reply=is_orphan,
+        lifecycle=lifecycle,
     )
+
+
+def _derive_thread_lifecycle(
+    root: ReviewCommentRecord,
+    replies: list[ReviewCommentRecord],
+    *,
+    is_orphan: bool,
+    pr_author_login: str | None,
+    latest_reviewer_states: list[ReviewerLatestState],
+    reviews_by_id: dict[int, PullRequestReviewRecord],
+    head_sha: str | None,
+) -> ReviewThreadLifecycle:
+    author_login = (pr_author_login or "").casefold()
+    root_is_author = bool(author_login and root.reviewer_login.casefold() == author_login)
+    author_replies = [
+        reply
+        for reply in replies
+        if author_login and reply.reviewer_login.casefold() == author_login and reply.created_at > root.created_at
+    ]
+    latest_author_reply = max(author_replies, key=_comment_sort_key) if author_replies else None
+    reviewer_follow_up = None
+    if latest_author_reply is not None:
+        reviewer_follow_up = next(
+            (
+                reply
+                for reply in sorted(replies, key=_comment_sort_key)
+                if reply.created_at > latest_author_reply.created_at
+                and (not author_login or reply.reviewer_login.casefold() != author_login)
+            ),
+            None,
+        )
+    claimed_reply = next((reply for reply in reversed(author_replies) if AUTHOR_ADDRESSED_PATTERN.search(reply.body_excerpt)), None)
+    is_outdated = root.current_position is None and root.original_position is not None
+    latest_state = next((state for state in latest_reviewer_states if state.reviewer_login == root.reviewer_login), None)
+    active_change_request = latest_state is not None and latest_state.state == ReviewState.CHANGES_REQUESTED
+    review = reviews_by_id.get(root.pull_request_review_id or -1)
+    approval_validity = _approval_validity(latest_reviewer_states, reviews_by_id, head_sha)
+    provenance = _base_provenance(root, pr_author_login, head_sha)
+
+    if is_outdated:
+        state = ReviewConcernAttentionState.OUTDATED
+        needs_attention = False
+        summary = "GitHub position metadata indicates this conversation is outdated."
+        provenance.append(_provenance("position", root, "Root comment has original position metadata but no current position."))
+    elif root_is_author:
+        state = ReviewConcernAttentionState.INFORMATIONAL
+        needs_attention = False
+        summary = "The PR author opened this conversation, so MergeSignal treats it as informational."
+    elif is_orphan:
+        state = ReviewConcernAttentionState.UNKNOWN
+        needs_attention = True
+        summary = "The reply's root comment was not available, so attention cannot be safely dismissed."
+    elif reviewer_follow_up is not None:
+        state = ReviewConcernAttentionState.REVIEWER_FOLLOW_UP
+        needs_attention = True
+        summary = "A non-author participant replied after the latest author response."
+        provenance.append(_provenance("reviewer_follow_up", reviewer_follow_up, "Reviewer or non-author participant commented after the latest author reply."))
+    elif claimed_reply is not None:
+        state = ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED
+        needs_attention = True
+        summary = "The author claims this concern was addressed; reviewer confirmation is not visible."
+        provenance.append(_provenance("author_claim", claimed_reply, "Author reply matched bounded addressed-claim language."))
+    elif latest_author_reply is not None:
+        state = ReviewConcernAttentionState.AUTHOR_REPLIED
+        needs_attention = active_change_request
+        summary = "The author replied, and no later reviewer follow-up is visible."
+        provenance.append(_provenance("author_reply", latest_author_reply, "PR author replied after the root comment."))
+    elif not root_is_author:
+        state = ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE
+        needs_attention = True
+        summary = "The root comment was made by a non-author participant and no later author reply is visible."
+    else:
+        state = ReviewConcernAttentionState.UNKNOWN
+        needs_attention = True
+        summary = "Available evidence does not support a more specific lifecycle state."
+
+    if active_change_request:
+        provenance.append(
+            ReviewConcernProvenance(
+                source="latest_review_state",
+                comment_id=None,
+                review_id=latest_state.review_id if latest_state else None,
+                actor_login=root.reviewer_login,
+                observed_at=latest_state.submitted_at if latest_state else None,
+                detail="Root reviewer latest observable review state requests changes.",
+            )
+        )
+    if review and review.commit_sha and head_sha and review.commit_sha != head_sha:
+        provenance.append(
+            ReviewConcernProvenance(
+                source="review_commit",
+                comment_id=None,
+                review_id=review.id,
+                actor_login=review.reviewer_login,
+                observed_at=review.submitted_at,
+                detail="Review commit SHA differs from the current PR head SHA.",
+            )
+        )
+
+    return ReviewThreadLifecycle(
+        attention_state=state,
+        needs_attention=needs_attention,
+        verification_needed=state == ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED,
+        has_author_reply=bool(author_replies),
+        has_reviewer_follow_up=reviewer_follow_up is not None,
+        author_claimed_addressed=claimed_reply is not None and reviewer_follow_up is None,
+        is_outdated=is_outdated,
+        resolution_visibility=ResolutionVisibility.UNAVAILABLE,
+        active_latest_change_request=active_change_request,
+        approval_validity=approval_validity,
+        summary=summary,
+        provenance=provenance,
+        limitations=["MergeSignal cannot verify that the code change resolves this concern."],
+    )
+
+
+def _base_provenance(root: ReviewCommentRecord, pr_author_login: str | None, head_sha: str | None) -> list[ReviewConcernProvenance]:
+    facts = [
+        _provenance("root_comment", root, "Root inline review comment for this conversation."),
+    ]
+    if pr_author_login:
+        facts.append(
+            ReviewConcernProvenance(
+                source="pr_author",
+                comment_id=None,
+                review_id=None,
+                actor_login=pr_author_login,
+                observed_at=None,
+                detail="PR author login used for author-reply matching.",
+            )
+        )
+    if head_sha:
+        facts.append(
+            ReviewConcernProvenance(
+                source="head_sha",
+                comment_id=None,
+                review_id=None,
+                actor_login=None,
+                observed_at=None,
+                detail="Current PR head SHA used for commit mismatch checks.",
+            )
+        )
+    return facts
+
+
+def _provenance(source: str, comment: ReviewCommentRecord, detail: str) -> ReviewConcernProvenance:
+    return ReviewConcernProvenance(
+        source=source,
+        comment_id=comment.id,
+        review_id=comment.pull_request_review_id,
+        actor_login=comment.reviewer_login,
+        observed_at=comment.created_at,
+        detail=detail,
+    )
+
+
+def _approval_validity(
+    latest_reviewer_states: list[ReviewerLatestState],
+    reviews_by_id: dict[int, PullRequestReviewRecord],
+    head_sha: str | None,
+) -> str:
+    if not head_sha:
+        return "unknown"
+    stale = [
+        reviews_by_id.get(state.review_id)
+        for state in latest_reviewer_states
+        if state.state == ReviewState.APPROVED
+    ]
+    if any(review and review.commit_sha and review.commit_sha != head_sha for review in stale):
+        return "potentially_stale"
+    return "unknown"
+
+
+def _build_concern_summary(
+    threads: list[ReviewThreadRecord],
+    latest_states: list[ReviewerLatestState],
+    reviews_by_id: dict[int, PullRequestReviewRecord],
+    head_sha: str | None,
+) -> ReviewConcernSummary:
+    state_counts = Counter(thread.lifecycle.attention_state for thread in threads)
+    needing_attention = sum(1 for thread in threads if thread.lifecycle.needs_attention)
+    active_change_requests = sum(1 for state in latest_states if state.state == ReviewState.CHANGES_REQUESTED)
+    potentially_stale_approvals = sum(
+        1
+        for state in latest_states
+        if state.state == ReviewState.APPROVED
+        and head_sha
+        and (review := reviews_by_id.get(state.review_id)) is not None
+        and review.commit_sha is not None
+        and review.commit_sha != head_sha
+    )
+    return ReviewConcernSummary(
+        total_conversations=len(threads),
+        needing_attention_count=needing_attention,
+        awaiting_author_response_count=state_counts[ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE],
+        author_replied_count=state_counts[ReviewConcernAttentionState.AUTHOR_REPLIED],
+        author_claimed_addressed_count=state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED],
+        reviewer_follow_up_count=state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP],
+        outdated_count=state_counts[ReviewConcernAttentionState.OUTDATED],
+        informational_count=state_counts[ReviewConcernAttentionState.INFORMATIONAL],
+        unknown_count=state_counts[ReviewConcernAttentionState.UNKNOWN],
+        active_latest_change_request_count=active_change_requests,
+        potentially_stale_approval_count=potentially_stale_approvals,
+        summary=_concern_summary_text(needing_attention, state_counts, active_change_requests),
+    )
+
+
+def _concern_summary_text(
+    needing_attention: int,
+    state_counts: Counter,
+    active_change_requests: int,
+) -> str:
+    if not sum(state_counts.values()):
+        return "No inline review conversations were observed."
+    parts: list[str] = []
+    if needing_attention:
+        parts.append(f"{needing_attention} review { _plural('conversation', needing_attention) } { _needs_need(needing_attention) } attention")
+    if state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED]:
+        count = state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED]
+        parts.append(f"author says {count} { _plural('concern', count) } addressed")
+    if state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP]:
+        count = state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP]
+        parts.append(f"{count} reviewer { _plural('follow-up', count) }")
+    if active_change_requests:
+        parts.append(f"{active_change_requests} latest change { _plural('request', active_change_requests) }")
+    return "; ".join(parts) + "."
+
+
+def _plural(word: str, count: int) -> str:
+    return word if count == 1 else f"{word}s"
+
+
+def _needs_need(count: int) -> str:
+    return "needs" if count == 1 else "need"
 
 
 def _latest_reviewer_states(reviews: list[PullRequestReviewRecord]) -> list[ReviewerLatestState]:

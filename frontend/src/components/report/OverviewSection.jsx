@@ -29,10 +29,12 @@ export function OverviewSection({ snapshot }) {
 function ReviewContextSummary({ snapshot }) {
   const context = snapshot.review_context;
   if (!context || (!context.review_count && !context.thread_count && context.visibility === "complete")) return null;
+  const concern = context.concern_summary ?? {};
   const facts = [
-    pluralFact(context.approved_count, "approval", "approvals"),
-    pluralFact(context.changes_requested_count, "change request", "change requests"),
-    pluralFact(context.thread_count, "inline conversation", "inline conversations"),
+    pluralFact(concern.needing_attention_count, "review conversation needs attention", "review conversations need attention"),
+    pluralFact(concern.active_latest_change_request_count, "reviewer currently requests changes", "reviewers currently request changes"),
+    pluralFact(concern.author_claimed_addressed_count, "author-said-addressed concern", "author-said-addressed concerns"),
+    pluralFact(context.thread_count && !concern.needing_attention_count, "inline conversation", "inline conversations"),
   ].filter(Boolean);
   return (
     <section className="review-context-summary" aria-label="Review context summary">

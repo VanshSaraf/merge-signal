@@ -40,17 +40,22 @@ export function ReviewsSection({ reviewContext }) {
 }
 
 function ReviewSummary({ context }) {
+  const concern = context.concern_summary ?? {};
   const items = [
-    ["Submitted reviews", context.review_count ?? 0],
-    ["Approvals", context.approved_count ?? 0],
-    ["Change requests", context.changes_requested_count ?? 0],
-    ["Inline conversations", context.thread_count ?? 0],
-  ];
+    ["Needs attention", concern.needing_attention_count ?? 0],
+    ["Awaiting response", concern.awaiting_author_response_count ?? 0],
+    ["Author replied", concern.author_replied_count ?? 0],
+    ["Author says addressed", concern.author_claimed_addressed_count ?? 0],
+    ["Reviewer follow-up", concern.reviewer_follow_up_count ?? 0],
+    ["Outdated", concern.outdated_count ?? 0],
+    ["Latest change requests", concern.active_latest_change_request_count ?? context.changes_requested_count ?? 0],
+  ].filter(([, value]) => value > 0);
+  const visibleItems = items.length ? items : [["Inline conversations", context.thread_count ?? 0]];
 
   return (
     <>
       <section className="review-summary-grid" aria-label="Observable review-state summary">
-        {items.map(([label, value]) => (
+        {visibleItems.map(([label, value]) => (
           <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>
         ))}
       </section>
@@ -71,15 +76,19 @@ function ReviewSummary({ context }) {
 function ReviewThreadRow({ thread, expanded, onToggle }) {
   const root = thread.root_comment ?? {};
   const replies = thread.replies ?? [];
+  const lifecycle = thread.lifecycle ?? {};
   const location = [thread.path, lineLabel(thread)].filter(Boolean).join(":");
   const githubUrl = safeHttpUrl(thread.html_url);
 
   return (
     <article className="report-item review-thread-row">
       <div className="item-heading">
+        <Badge tone={attentionTone(lifecycle.attention_state)}>{attentionLabel(lifecycle.attention_state)}</Badge>
         <Badge>{root.reviewer_login ?? "Unknown"}</Badge>
         {thread.is_orphan_reply && <Badge tone="warning">Orphan reply</Badge>}
         <span>{replies.length} {replies.length === 1 ? "reply" : "replies"}</span>
+        {lifecycle.has_author_reply && <span>Author responded</span>}
+        {lifecycle.has_reviewer_follow_up && <span>Reviewer followed up</span>}
       </div>
       <h3>{location || "Inline review conversation"}</h3>
       <p>{root.body_excerpt || "No comment text available."}</p>
@@ -88,6 +97,11 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
       </button>
       {expanded && (
         <div className="technical-details">
+          <div className="review-lifecycle-note">
+            <strong>{attentionLabel(lifecycle.attention_state)}</strong>
+            <p>{lifecycle.summary ?? "Lifecycle evidence is unavailable."}</p>
+            <small>MergeSignal cannot verify that the code change resolves this concern.</small>
+          </div>
           <CommentBlock comment={root} label="Root comment" />
           {replies.map((reply) => <CommentBlock comment={reply} key={reply.id} label="Reply" />)}
           {githubUrl && <a className="button button--secondary button--compact" href={githubUrl} target="_blank" rel="noreferrer">Open on GitHub</a>}
@@ -98,6 +112,11 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
               <li><code>{thread.id}</code></li>
               <li>Root comment ID: <code>{thread.root_comment_id}</code></li>
               {root.pull_request_review_id && <li>Review ID: <code>{root.pull_request_review_id}</code></li>}
+              {(lifecycle.provenance ?? []).map((fact) => (
+                <li key={`${fact.source}-${fact.comment_id ?? fact.review_id ?? fact.detail}`}>
+                  {fact.source}: {fact.detail}
+                </li>
+              ))}
             </ul>
           </details>
         </div>
@@ -148,6 +167,30 @@ function reviewStateTone(state) {
     dismissed: "warning",
     pending: "warning",
   }[state] ?? toneForLevel(state);
+}
+
+function attentionLabel(state) {
+  return {
+    awaiting_author_response: "Needs author response",
+    author_replied: "Author replied",
+    author_claimed_addressed: "Author says addressed",
+    reviewer_follow_up: "Reviewer followed up",
+    outdated: "Outdated conversation",
+    informational: "Informational",
+    unknown: "State unknown",
+  }[state] ?? "State unknown";
+}
+
+function attentionTone(state) {
+  return {
+    awaiting_author_response: "warning",
+    author_replied: "info",
+    author_claimed_addressed: "warning",
+    reviewer_follow_up: "danger",
+    outdated: "neutral",
+    informational: "neutral",
+    unknown: "warning",
+  }[state] ?? "warning";
 }
 
 function emptyMessage(context) {

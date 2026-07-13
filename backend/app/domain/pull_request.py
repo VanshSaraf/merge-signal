@@ -329,6 +329,20 @@ class ReviewState(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ReviewConcernAttentionState(StrEnum):
+    AWAITING_AUTHOR_RESPONSE = "awaiting_author_response"
+    AUTHOR_REPLIED = "author_replied"
+    AUTHOR_CLAIMED_ADDRESSED = "author_claimed_addressed"
+    REVIEWER_FOLLOW_UP = "reviewer_follow_up"
+    OUTDATED = "outdated"
+    INFORMATIONAL = "informational"
+    UNKNOWN = "unknown"
+
+
+class ResolutionVisibility(StrEnum):
+    UNAVAILABLE = "unavailable"
+
+
 class CiSurfaceType(StrEnum):
     CHECK_RUN = "check_run"
     COMMIT_STATUS = "commit_status"
@@ -487,7 +501,52 @@ class ReviewCommentRecord(StrictDomainModel):
     start_line: int | None = Field(description="Current start line when directly observable.")
     side: str | None = Field(description="Current diff side when directly observable.")
     start_side: str | None = Field(description="Current start side when directly observable.")
+    current_position: int | None = Field(description="Current diff position when directly observable.")
+    original_position: int | None = Field(description="Original diff position when directly observable.")
     commit_sha: str | None = Field(description="Commit SHA associated with the comment when available.")
+
+
+class ReviewConcernProvenance(StrictDomainModel):
+    source: str = Field(description="Observable source fact used in lifecycle derivation.")
+    comment_id: int | None = Field(description="Related comment ID when applicable.")
+    review_id: int | None = Field(description="Related review ID when applicable.")
+    actor_login: str | None = Field(description="Actor login when applicable.")
+    observed_at: datetime | None = Field(description="Timestamp for the observed fact when available.")
+    detail: str = Field(description="Safe explanation of the observed fact.")
+
+
+class ReviewThreadLifecycle(StrictDomainModel):
+    attention_state: ReviewConcernAttentionState = Field(description="Primary deterministic attention state.")
+    needs_attention: bool = Field(description="Whether the conversation currently needs reviewer attention.")
+    verification_needed: bool = Field(description="Whether an author-addressed claim needs reviewer confirmation.")
+    has_author_reply: bool = Field(description="Whether the PR author replied after the root comment.")
+    has_reviewer_follow_up: bool = Field(description="Whether a non-author participant replied after the latest author reply.")
+    author_claimed_addressed: bool = Field(description="Whether a PR-author reply contains bounded addressed-claim language.")
+    is_outdated: bool = Field(description="Whether GitHub metadata indicates the inline position is outdated.")
+    resolution_visibility: ResolutionVisibility = Field(description="Whether formal thread resolution is observable.")
+    active_latest_change_request: bool = Field(description="Whether the root reviewer currently has latest observable changes-requested state.")
+    approval_validity: str = Field(description="Observable approval validity note for review chronology.")
+    summary: str = Field(description="Concise deterministic lifecycle summary.")
+    provenance: list[ReviewConcernProvenance] = Field(description="Observable facts supporting the lifecycle decision.")
+    limitations: list[str] = Field(description="Lifecycle limitations.")
+
+
+def empty_thread_lifecycle() -> ReviewThreadLifecycle:
+    return ReviewThreadLifecycle(
+        attention_state=ReviewConcernAttentionState.UNKNOWN,
+        needs_attention=True,
+        verification_needed=False,
+        has_author_reply=False,
+        has_reviewer_follow_up=False,
+        author_claimed_addressed=False,
+        is_outdated=False,
+        resolution_visibility=ResolutionVisibility.UNAVAILABLE,
+        active_latest_change_request=False,
+        approval_validity="unknown",
+        summary="Review concern lifecycle has not been evaluated.",
+        provenance=[],
+        limitations=["MergeSignal cannot verify that the code change resolves this concern."],
+    )
 
 
 class ReviewThreadRecord(StrictDomainModel):
@@ -503,6 +562,10 @@ class ReviewThreadRecord(StrictDomainModel):
     participant_logins: list[str] = Field(description="Unique participant logins in deterministic order.")
     html_url: str | None = Field(description="Safe GitHub URL for the conversation root when available.")
     is_orphan_reply: bool = Field(description="Whether this thread was created from a reply whose root was unavailable.")
+    lifecycle: ReviewThreadLifecycle = Field(
+        default_factory=empty_thread_lifecycle,
+        description="Deterministic review-concern lifecycle and attention state.",
+    )
 
 
 class ReviewerLatestState(StrictDomainModel):
@@ -510,6 +573,21 @@ class ReviewerLatestState(StrictDomainModel):
     state: ReviewState = Field(description="Latest observable review state for this reviewer.")
     review_id: int = Field(description="Review identifier that produced the latest observable state.")
     submitted_at: datetime | None = Field(description="Submission timestamp for the latest state when available.")
+
+
+class ReviewConcernSummary(StrictDomainModel):
+    total_conversations: int = Field(description="Total inline review conversations.")
+    needing_attention_count: int = Field(description="Conversations that need attention.")
+    awaiting_author_response_count: int = Field(description="Conversations awaiting author response.")
+    author_replied_count: int = Field(description="Conversations where the author replied without later reviewer follow-up.")
+    author_claimed_addressed_count: int = Field(description="Conversations where the author claimed the concern was addressed.")
+    reviewer_follow_up_count: int = Field(description="Conversations with reviewer follow-up after author response.")
+    outdated_count: int = Field(description="Conversations marked outdated by observable GitHub metadata.")
+    informational_count: int = Field(description="Conversations treated as informational.")
+    unknown_count: int = Field(description="Conversations with unknown lifecycle state.")
+    active_latest_change_request_count: int = Field(description="Reviewers whose latest observable state requests changes.")
+    potentially_stale_approval_count: int = Field(description="Latest approvals whose review commit SHA differs from the current head SHA.")
+    summary: str = Field(description="Concise deterministic review-concern summary.")
 
 
 class ReviewContext(StrictDomainModel):
@@ -523,6 +601,7 @@ class ReviewContext(StrictDomainModel):
     commented_count: int = Field(description="Observable commented review count.")
     dismissed_count: int = Field(description="Observable dismissed review count.")
     pending_count: int = Field(description="Observable pending review count.")
+    concern_summary: ReviewConcernSummary = Field(description="Summary of deterministic review-concern lifecycle.")
     reviews: list[PullRequestReviewRecord] = Field(description="Observable pull-request reviews.")
     latest_reviewer_states: list[ReviewerLatestState] = Field(description="Latest observable state per reviewer.")
     threads: list[ReviewThreadRecord] = Field(description="Deterministic inline review conversations.")
@@ -548,13 +627,27 @@ def empty_review_context() -> ReviewContext:
         commented_count=0,
         dismissed_count=0,
         pending_count=0,
+        concern_summary=ReviewConcernSummary(
+            total_conversations=0,
+            needing_attention_count=0,
+            awaiting_author_response_count=0,
+            author_replied_count=0,
+            author_claimed_addressed_count=0,
+            reviewer_follow_up_count=0,
+            outdated_count=0,
+            informational_count=0,
+            unknown_count=0,
+            active_latest_change_request_count=0,
+            potentially_stale_approval_count=0,
+            summary="No inline review conversations were observed.",
+        ),
         reviews=[],
         latest_reviewer_states=[],
         threads=[],
         warnings=[],
         limitations=[
             "Review context reports observable GitHub review state only.",
-            "MergeSignal does not determine whether review concerns are resolved in this milestone.",
+            "MergeSignal does not determine whether review concerns are formally resolved in this milestone.",
             "Review comments do not automatically change merge risk or readiness.",
         ],
     )

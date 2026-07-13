@@ -1368,6 +1368,24 @@ input:disabled {
   color: var(--text-3);
 }
 
+.review-lifecycle-note {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.review-lifecycle-note p,
+.review-lifecycle-note small {
+  margin: 0;
+}
+
+.review-lifecycle-note small {
+  color: var(--text-3);
+}
+
 .assessment-tile {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, var(--accent-soft)), var(--surface));

@@ -191,6 +191,9 @@ class GitHubRestClient:
     async def get_pull_request_review_context(
         self,
         reference: PullRequestReference,
+        *,
+        pr_author_login: str | None = None,
+        head_sha: str | None = None,
     ) -> ReviewContext:
         warnings: list[str] = []
         reviews: list[PullRequestReviewRecord] = []
@@ -229,6 +232,8 @@ class GitHubRestClient:
             comments_complete=comments_complete,
             review_pages_fetched=review_pages_fetched,
             comment_pages_fetched=comment_pages_fetched,
+            pr_author_login=pr_author_login,
+            head_sha=head_sha,
             warnings=warnings,
         )
 
@@ -296,7 +301,11 @@ class GitHubRestClient:
         commits = await self.list_pull_request_commits(reference)
         ci = await self.get_pull_request_ci(reference, metadata.head_sha)
         ci_explanation = build_ci_explanation(ci)
-        review_context = await self.get_pull_request_review_context(reference)
+        review_context = await self.get_pull_request_review_context(
+            reference,
+            pr_author_login=metadata.author.login,
+            head_sha=metadata.head_sha,
+        )
         completeness = self._build_completeness(metadata, files, commits)
 
         snapshot = PullRequestSnapshot(
@@ -635,6 +644,8 @@ class GitHubRestClient:
             start_line=upstream.start_line,
             side=upstream.side,
             start_side=upstream.start_side,
+            current_position=upstream.position,
+            original_position=upstream.original_position,
             commit_sha=upstream.commit_id,
         )
 

@@ -77,7 +77,7 @@ Unsupported or malformed PR URLs also return `422`, but use the stable MergeSign
 
 ## POST /api/v1/pull-requests/snapshot
 
-Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, review-thread resolution detection, or approval-state decisions.
+Parses a public GitHub PR URL, fetches pull-request metadata, changed files, commits, check runs, commit statuses, submitted reviews, and inline review comments from the GitHub REST API, classifies changed-file path strings, detects deterministic review signals, calculates merge risk and evidence confidence, calculates merge readiness, ranks changed files by deterministic review priority, builds deterministic review actions, and returns a normalized snapshot. This endpoint does not perform required-check inference, reviewer assignment, CODEOWNERS evaluation, repository policy evaluation, generated fixes, formal review-thread resolution detection, or approval-state decisions.
 
 Request:
 
@@ -224,13 +224,27 @@ Compact success response:
       "commented_count": 0,
       "dismissed_count": 0,
       "pending_count": 0,
+      "concern_summary": {
+        "total_conversations": 0,
+        "needing_attention_count": 0,
+        "awaiting_author_response_count": 0,
+        "author_replied_count": 0,
+        "author_claimed_addressed_count": 0,
+        "reviewer_follow_up_count": 0,
+        "outdated_count": 0,
+        "informational_count": 0,
+        "unknown_count": 0,
+        "active_latest_change_request_count": 0,
+        "potentially_stale_approval_count": 0,
+        "summary": "No inline review conversations were observed."
+      },
       "reviews": [],
       "latest_reviewer_states": [],
       "threads": [],
       "warnings": [],
       "limitations": [
         "Review context reports observable GitHub review state only.",
-        "MergeSignal does not determine whether review concerns are resolved in this milestone."
+        "MergeSignal does not determine whether review concerns are formally resolved in this milestone."
       ]
     },
     "classification_summary": {
@@ -426,7 +440,9 @@ When CI is failing, `blocking_items` identifies the exact observed failing surfa
 
 Review records expose reviewer login, normalized review state, submitted timestamp, sanitized bounded body excerpt, safe GitHub URL, and commit SHA when available. Inline comments are grouped into deterministic threads using `in_reply_to_id`: root comments start conversations, replies attach to their root, and orphan replies become standalone threads with warnings. Raw diff hunks and patches are not exposed.
 
-Review-context visibility values are `complete`, `partial`, and `unavailable`. Partial or unavailable review context is represented with warnings and limitations. MergeSignal does not determine whether review conversations are resolved, whether an approval is still valid after later commits, or whether a change request has been fixed.
+Each thread can include a `lifecycle` object with an attention state, attention and verification flags, resolution visibility, active latest change-request visibility, approval validity, a short summary, limitations, and provenance. Attention states are `awaiting_author_response`, `author_replied`, `author_claimed_addressed`, `reviewer_follow_up`, `outdated`, `informational`, and `unknown`.
+
+`review_context.concern_summary` counts those lifecycle states across inline conversations and reports active latest change requests and potentially stale approvals. Review-context visibility values are `complete`, `partial`, and `unavailable`. Partial or unavailable review context is represented with warnings and limitations. MergeSignal does not determine whether review conversations are formally resolved, whether an approval is still valid after later commits, or whether a change request has been fixed.
 
 Example:
 
@@ -458,7 +474,7 @@ Snapshot components:
 - `commits`: commits in GitHub order.
 - `ci`: check runs, current commit statuses, aggregate CI state, visibility, counts, warnings, and CI completeness.
 - `ci_explanation`: grouped CI surfaces, item-level states, deterministic categories, blocking items, and safe details links.
-- `review_context`: submitted reviews, latest observable reviewer states, inline review conversations, completeness, warnings, and limitations.
+- `review_context`: submitted reviews, latest observable reviewer states, inline review conversations, concern lifecycle, completeness, warnings, and limitations.
 - `classification_summary`: counts and warnings across changed-file classifications.
 - `signals`: deterministic review signals derived from snapshot data.
 - `signal_summary`: counts and warnings across emitted review signals.

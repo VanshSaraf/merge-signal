@@ -20,6 +20,9 @@ from app.domain.pull_request import (
     SnapshotCompleteness,
     CheckRunRecord,
     CommitStatusRecord,
+    PullRequestReviewRecord,
+    ReviewCommentRecord,
+    ReviewState,
 )
 from app.domain.review_action import (
     ReviewAction,
@@ -38,6 +41,7 @@ from app.scoring import calculate_evidence_confidence, calculate_merge_risk
 from app.services.ci_explanation import build_ci_explanation
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
+from app.services.review_context import build_review_context, sanitize_review_body
 from app.signals.engine import analyze_snapshot_signals
 
 BASE_TIME = datetime(2026, 7, 12, 10, 0, tzinfo=UTC)
@@ -89,6 +93,54 @@ def manual_signal(
     )
 
 
+def review_comment(
+    id: int,
+    reviewer_login: str,
+    body: str,
+    *,
+    created_at: datetime = BASE_TIME,
+    in_reply_to_id: int | None = None,
+    path: str = "backend/app/main.py",
+) -> ReviewCommentRecord:
+    return ReviewCommentRecord(
+        id=id,
+        reviewer_login=reviewer_login,
+        body_excerpt=sanitize_review_body(body) or "",
+        created_at=created_at,
+        updated_at=None,
+        html_url=f"https://github.com/octocat/Hello-World/pull/42#discussion_r{id}",
+        pull_request_review_id=900,
+        in_reply_to_id=in_reply_to_id,
+        path=path,
+        line=12,
+        start_line=None,
+        side="RIGHT",
+        start_side=None,
+        current_position=3,
+        original_position=3,
+        commit_sha="head",
+    )
+
+
+def review_record(
+    id: int,
+    reviewer_login: str,
+    state: ReviewState,
+    *,
+    submitted_at: datetime = BASE_TIME,
+    commit_sha: str = "head",
+) -> PullRequestReviewRecord:
+    return PullRequestReviewRecord(
+        id=id,
+        reviewer_login=reviewer_login,
+        state=state,
+        submitted_at=submitted_at,
+        body_excerpt=None,
+        html_url=f"https://github.com/octocat/Hello-World/pull/42#pullrequestreview-{id}",
+        commit_sha=commit_sha,
+    )
+
+
 def base_snapshot(
     files: list[ChangedFile],
     *,
@@ -97,6 +149,7 @@ def base_snapshot(
     ci_visibility: CiVisibility = CiVisibility.COMPLETE,
     check_runs: list[CheckRunRecord] | None = None,
     commit_statuses: list[CommitStatusRecord] | None = None,
+    review_context=None,
     files_complete: bool = True,
     commits_complete: bool = True,
 ) -> PullRequestSnapshot:
@@ -167,6 +220,16 @@ def base_snapshot(
         commits=[PullRequestCommit(sha="commit", message="Fixture", html_url=None, author_login=None, author_name=None, authored_at=BASE_TIME, committed_at=BASE_TIME)],
         ci=ci,
         ci_explanation=build_ci_explanation(ci),
+        review_context=review_context if review_context is not None else build_review_context(
+            [],
+            [],
+            reviews_complete=True,
+            comments_complete=True,
+            review_pages_fetched=0,
+            comment_pages_fetched=0,
+            pr_author_login="octocat",
+            head_sha="head",
+        ),
         classification_summary=classification_summary,
         signals=signals or [],
         completeness=SnapshotCompleteness(
@@ -188,6 +251,7 @@ def analyzed_snapshot(
     ci_visibility: CiVisibility = CiVisibility.COMPLETE,
     check_runs: list[CheckRunRecord] | None = None,
     commit_statuses: list[CommitStatusRecord] | None = None,
+    review_context=None,
     files_complete: bool = True,
     commits_complete: bool = True,
 ) -> PullRequestSnapshot:
@@ -198,6 +262,7 @@ def analyzed_snapshot(
         ci_visibility=ci_visibility,
         check_runs=check_runs,
         commit_statuses=commit_statuses,
+        review_context=review_context,
         files_complete=files_complete,
         commits_complete=commits_complete,
     )
@@ -321,6 +386,61 @@ def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
     assert "Authorization required to deploy." in evidence
     assert "https://vercel.com/git/authorize?repo=octocat" in evidence
     assert "Passed CI item: GitHub Actions / Static checks & unit tests." in actions["action.inspect_failing_ci"].evidence
+
+
+def test_review_concern_lifecycle_actions_are_deduplicated_traceable_and_non_scoring() -> None:
+    review_context = build_review_context(
+        [review_record(900, "reviewer", ReviewState.CHANGES_REQUESTED)],
+        [
+            review_comment(901, "reviewer", "Please fix this.", path="backend/app/main.py"),
+            review_comment(902, "octocat", "Fixed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    snapshot = analyzed_snapshot([changed_file("backend/app/main.py")], review_context=review_context)
+
+    before_risk = snapshot.merge_risk.score
+    before_readiness = snapshot.merge_readiness.decision
+    actions, _summary = build_review_actions(snapshot)
+    review_actions = [action for action in actions if action.category == ReviewActionCategory.REVIEW]
+
+    assert len(review_actions) == 1
+    assert review_actions[0].rule_id == "action.review_concern.active_change_request"
+    assert review_actions[0].affected_files == ["backend/app/main.py"]
+    assert any("Details URL: https://github.com/octocat/Hello-World/pull/42#discussion_r901" in item for item in review_actions[0].evidence)
+    assert any("cannot verify" in item for item in review_actions[0].evidence)
+    assert snapshot.merge_risk.score == before_risk
+    assert snapshot.merge_readiness.decision == before_readiness
+
+
+def test_author_claimed_addressed_action_is_emitted_without_active_change_request() -> None:
+    review_context = build_review_context(
+        [review_record(900, "reviewer", ReviewState.COMMENTED)],
+        [
+            review_comment(901, "reviewer", "Please revise this.", path="backend/app/main.py"),
+            review_comment(902, "octocat", "Addressed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    snapshot = analyzed_snapshot([changed_file("backend/app/main.py")], review_context=review_context)
+
+    actions = actions_by_rule(snapshot)
+
+    assert "action.review_concern.verify_author_claim" in actions
+    action = actions["action.review_concern.verify_author_claim"]
+    assert action.id == "action.review_concern.verify_author_claim.901"
+    assert action.priority == ReviewActionPriority.MEDIUM
+    assert any("cannot verify" in item for item in action.evidence)
 
 
 def test_security_actions_are_distinct_and_sanitized() -> None:

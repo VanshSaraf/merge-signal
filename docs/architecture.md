@@ -41,7 +41,7 @@ HTTP request
 -> check-run and commit-status retrieval for that head SHA
 -> structured CI explanation for observed surfaces
 -> submitted review and inline review-comment retrieval
--> deterministic review-context thread construction
+-> deterministic review-context thread construction and concern lifecycle
 -> deterministic review-signal engine
 -> signal aggregation and summary generation
 -> merge-risk engine
@@ -55,7 +55,7 @@ HTTP request
 
 ## Domain Layer
 
-`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, observable review context, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, CODEOWNERS results, repository policy results, generated patches, merge commands, or review-thread resolution claims.
+`PullRequestReference` represents only the normalized identity of a GitHub pull request: owner, repository, pull number, and canonical URL. Snapshot domain models represent normalized metadata, changed files, deterministic file classification, review signals, merge risk, evidence confidence, merge readiness, ranked changed files, review actions, commits, read-only CI visibility, observable review context, concern lifecycle, completeness, fetch timestamp, and rate-limit metadata. They intentionally do not include required reviewers, CODEOWNERS results, repository policy results, generated patches, merge commands, or formal review-thread resolution claims.
 
 ## File Classification Service
 
@@ -114,7 +114,7 @@ File priority is separate from merge risk. It is a deterministic review-ordering
 
 The review-action engine lives under `app/review_actions/` and consumes the completed in-memory snapshot after file prioritization. It returns `review_actions` and `review_action_summary`, and it does not mutate signals, readiness reasons, risk contributions, confidence components, ranked files, CI, completeness, or classifications.
 
-Review actions are deterministic human-review prompts, not AI commentary, generated fixes, reviewer assignments, or probability claims. The engine uses explicit rule IDs only, aggregates related evidence, suppresses repetitive CI and testing prompts, sanitizes security evidence, and performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
+Review actions are deterministic human-review prompts, not AI commentary, generated fixes, reviewer assignments, or probability claims. The engine uses explicit rule IDs only, aggregates related evidence, suppresses repetitive CI and testing prompts, sanitizes security evidence, can emit review-concern lifecycle prompts, and performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
 
 ## Parser Service
 
@@ -132,7 +132,7 @@ CI retrieval uses only `metadata.head_sha`. Check runs are fetched from the comm
 
 The CI aggregation service lives outside FastAPI. It reduces check-run outcomes and current commit-status contexts into state and visibility values without making merge-readiness claims. A separate CI explanation service converts those already-fetched records into grouped surfaces, item-level normalized states, deterministic categories, blocking items, and safe HTTPS details links. Partial CI-only failures can produce a successful snapshot with warnings, while authentication and rate-limit failures remain global errors.
 
-Review-context retrieval uses the same GitHub REST client and bounded pagination controls to collect pull-request reviews and inline review comments. The review-context service groups inline comments into deterministic root/reply conversations, preserves orphan replies with warnings, sanitizes user-generated text, computes latest observable reviewer states, and exposes only safe GitHub links. It does not infer resolution, staleness, concern lifecycle, or reviewer policy effects.
+Review-context retrieval uses the same GitHub REST client and bounded pagination controls to collect pull-request reviews and inline review comments. The review-context service groups inline comments into deterministic root/reply conversations, preserves orphan replies with warnings, sanitizes user-generated text, computes latest observable reviewer states, derives bounded concern attention states with provenance, and exposes only safe GitHub links. It does not infer formal resolution, reviewer agreement, code correctness, reviewer policy effects, or CODEOWNERS effects.
 
 Pagination is centralized in `app/integrations/github/pagination.py`. Only safe `rel="next"` links on the configured API host are followed, repeated links are rejected, and `GITHUB_MAX_PAGES` bounds the flow.
 
@@ -180,7 +180,7 @@ The frontend is a Vite React application under `frontend/src`.
 - `test/` contains test setup.
 - `utils/` contains formatting and status helpers.
 
-React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, files, reviews, signals, actions, and evidence. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
+React Router owns client-side navigation. The current home page provides the end-to-end pull-request analysis flow: URL input, loading and cancellation, safe error rendering, and a detailed report built only from real snapshot responses. Report tabs cover overview, files, reviews, signals, actions, and evidence, including review-concern lifecycle summaries and provenance. Client-side filtering and sorting operate on the received snapshot payload and do not trigger extra backend or GitHub requests.
 
 ## Configuration
 

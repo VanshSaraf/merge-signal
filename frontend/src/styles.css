@@ -82,6 +82,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: clip;
 }
 
 a {
@@ -855,11 +856,14 @@ input:disabled {
 .report-section {
   display: grid;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .report-shell {
   box-shadow: var(--shadow);
   display: grid;
+  max-width: 100%;
+  min-width: 0;
   overflow: visible;
   position: relative;
 }
@@ -902,6 +906,7 @@ input:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .pull-header h2 {
@@ -962,9 +967,30 @@ input:disabled {
   overflow-wrap: anywhere;
 }
 
+.previous-analysis-banner {
+  align-items: center;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
+  border-radius: var(--radius-md);
+  color: var(--warning);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.previous-analysis-label {
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 850;
+  margin: 0 0 var(--space-1);
+  text-transform: uppercase;
+}
+
 .report-console {
   display: grid;
   min-height: 620px;
+  min-width: 0;
 }
 
 .report-console--overview {
@@ -978,6 +1004,7 @@ input:disabled {
 .report-nav-sticky {
   background: var(--surface-2);
   border-right: 1px solid var(--border);
+  min-width: 0;
   position: sticky;
   top: 61px;
   z-index: 6;
@@ -986,6 +1013,7 @@ input:disabled {
 .report-tabs {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
   padding: var(--space-3);
 }
 
@@ -1000,6 +1028,7 @@ input:disabled {
   min-height: 38px;
   padding: 0 var(--space-3);
   text-align: left;
+  white-space: nowrap;
 }
 
 .report-tab:hover {
@@ -1636,7 +1665,12 @@ input:disabled {
 .drawer-header h2,
 .detail-grid dd,
 .mini-list li,
-.pull-meta dd {
+.mini-list code,
+.path-chip-list code,
+.briefing-files strong,
+.briefing-files small,
+.pull-meta dd,
+.review-excerpt {
   overflow-wrap: anywhere;
 }
 
@@ -2111,12 +2145,17 @@ code {
   .report-nav-sticky {
     border-bottom: 1px solid var(--border);
     border-right: 0;
+    max-width: 100%;
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
     top: 61px;
+    width: 100%;
   }
 
   .report-tabs {
     display: flex;
+    min-width: max-content;
+    width: max-content;
   }
 
   .report-tab {

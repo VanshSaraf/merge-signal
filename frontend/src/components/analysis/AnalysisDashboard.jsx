@@ -9,13 +9,13 @@ import { OverviewSection } from "../report/OverviewSection.jsx";
 import { ReviewsSection } from "../report/ReviewsSection.jsx";
 import { SignalsSection } from "../report/SignalsSection.jsx";
 
-export function AnalysisDashboard({ snapshot }) {
+export function AnalysisDashboard({ snapshot, isStale = false }) {
   const [activeSection, setActiveSection] = useState("overview");
   const filters = useReportFilters(snapshot);
 
   return (
     <div className="dashboard report-workspace" aria-live="polite">
-      <ReportShell snapshot={snapshot} activeSection={activeSection} onSectionChange={setActiveSection}>
+      <ReportShell snapshot={snapshot} activeSection={activeSection} onSectionChange={setActiveSection} isStale={isStale}>
         <div role="tabpanel" id={`report-panel-${activeSection}`} aria-labelledby={`report-tab-${activeSection}`} className="report-panel" tabIndex={0}>
           {activeSection === "overview" && <OverviewSection snapshot={snapshot} onNavigate={setActiveSection} />}
           {activeSection === "files" && (

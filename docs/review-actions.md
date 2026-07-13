@@ -47,7 +47,7 @@ Suppression keeps output concise:
 - The baseline file-review action never replaces specific actions.
 - The Review Briefing suppresses the baseline file-review action when it emits a specific top-file step for the same canonical path.
 
-Affected files are ordered by ranked-file position when available, then by path case-insensitively, then by original path.
+Affected files are ordered by ranked-file position when available, then by path case-insensitively, then by original path. In the frontend, actions without explicit paths use scope-aware labels such as `PR-wide`, `CI-wide`, or `Changed-file set` instead of displaying `0 affected files`.
 
 ## Security Sanitization
 

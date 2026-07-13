@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { titleCase } from "../../utils/formatting.js";
-import { extractSafeUrl, optionValues } from "../../utils/report.js";
+import { extractSafeUrl, optionValues, scopeLabel } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { FilterBar, SelectFilter, TextFilter } from "./FilterBar.jsx";
 
@@ -37,7 +37,6 @@ export function ActionsSection({ actions, filteredActions, filters, setFilters, 
 }
 
 function ActionRow({ action, expanded, onToggle }) {
-  const affectedCount = action.affected_files?.length ?? 0;
   const signalCount = action.related_signal_ids?.length ?? 0;
 
   return (
@@ -46,7 +45,7 @@ function ActionRow({ action, expanded, onToggle }) {
       <div className="item-heading">
         <Badge tone={toneForLevel(action.priority)}>{titleCase(action.priority)}</Badge>
         <Badge>{titleCase(action.category)}</Badge>
-        <span>{affectedCount} affected {affectedCount === 1 ? "file" : "files"}</span>
+        <span>{scopeLabel(action)}</span>
         <span>{signalCount} related {signalCount === 1 ? "signal" : "signals"}</span>
       </div>
       <h3>{action.title}</h3>

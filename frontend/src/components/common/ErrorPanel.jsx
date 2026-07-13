@@ -10,9 +10,11 @@ export function ErrorPanel({ error, onRetry }) {
         <h2>{message.title}</h2>
         <p>{message.detail}</p>
       </div>
-      <button className="button button--secondary" type="button" onClick={onRetry}>
-        Retry
-      </button>
+      {onRetry && (
+        <button className="button button--secondary" type="button" onClick={onRetry}>
+          Retry
+        </button>
+      )}
     </section>
   );
 }

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { titleCase } from "../../utils/formatting.js";
-import { cleanEvidence, extractSafeUrl, optionValues } from "../../utils/report.js";
+import { cleanEvidence, extractSafeUrl, optionValues, scopeLabel } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { FilterBar, SelectFilter, TextFilter } from "./FilterBar.jsx";
 
@@ -42,7 +42,7 @@ function SignalRow({ signal, expanded, onToggle }) {
       <div className="item-heading">
         <Badge tone={toneForLevel(signal.severity)}>{titleCase(signal.severity)}</Badge>
         <Badge>{titleCase(signal.category)}</Badge>
-        <span>{signal.affected_files?.length ?? 0} affected {(signal.affected_files?.length ?? 0) === 1 ? "file" : "files"}</span>
+        <span>{scopeLabel(signal)}</span>
       </div>
       <h3>{signal.title}</h3>
       <p>{signal.description}</p>

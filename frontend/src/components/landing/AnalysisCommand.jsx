@@ -5,7 +5,7 @@ const PR_URL_PATTERN = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?$/
 
 export function AnalysisCommand({ value, onChange, onSubmit, onCancel, isLoading, validationError, compact = false }) {
   return (
-    <form className={["analysis-command", compact ? "analysis-command--compact" : ""].filter(Boolean).join(" ")} onSubmit={onSubmit}>
+    <form className={["analysis-command", compact ? "analysis-command--compact" : ""].filter(Boolean).join(" ")} onSubmit={onSubmit} noValidate>
       <div className="analysis-command__header">
         <div>
           <p className="eyebrow">{compact ? "Analyze another PR" : "Analyze a public pull request"}</p>

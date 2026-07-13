@@ -224,16 +224,51 @@ def two_failing_ci_surfaces() -> PullRequestCi:
     )
 
 
+def duplicate_github_actions_test_failures() -> PullRequestCi:
+    return aggregate_ci_state(
+        [
+            CheckRunRecord(
+                id=7,
+                name="Unit tests",
+                status="completed",
+                conclusion="failure",
+                provider_name="GitHub Actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/7",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+            CheckRunRecord(
+                id=8,
+                name="Integration tests",
+                status="completed",
+                conclusion="failure",
+                provider_name="github actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/8",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            ),
+        ],
+        [],
+        check_runs_complete=True,
+        commit_statuses_complete=True,
+        check_run_pages_fetched=1,
+        commit_status_pages_fetched=1,
+        total_check_runs=2,
+    )
+
+
 def test_briefing_identifies_specific_blocking_ci_surface_and_safe_link() -> None:
     result = snapshot([changed_file("backend/app/main.py")], ci=failing_vercel_ci())
     briefing = result.review_briefing
 
     assert briefing.status == "blocked"
-    assert briefing.headline == "Blocked by failed vercel authorization/configuration check."
+    assert briefing.headline == "Blocked by failed Vercel authorization/configuration check."
     assert briefing.primary_reason is not None
     assert briefing.primary_reason.url == "https://vercel.com/git/authorize?repo=octocat"
     assert briefing.review_focus[0].title == "Inspect failed Vercel authorization/configuration check"
-    assert any(id.startswith("ci:commit_status:vercel:vercel:") for id in briefing.provenance.ci_item_ids)
+    assert any(id.startswith("ci:commit_status:vercel:authorization_or_configuration:vercel:") for id in briefing.provenance.ci_item_ids)
     assert result.merge_readiness.decision.value == "blocked"
     assert [item.title for item in briefing.review_focus].count("Inspect failed Vercel authorization/configuration check") == 1
     assert "CI reports a failing state" not in [item.title for item in briefing.review_focus]
@@ -247,6 +282,21 @@ def test_distinct_ci_failures_remain_distinct_in_briefing() -> None:
 
     assert "Inspect failed Vercel authorization/configuration check" in titles
     assert "Inspect failed GitHub Actions check" in titles
+
+
+def test_equivalent_ci_blockers_collapse_and_preserve_provenance() -> None:
+    result = snapshot([changed_file("backend/app/main.py")], ci=duplicate_github_actions_test_failures())
+    briefing = result.review_briefing
+    titles = [item.title for item in briefing.review_focus]
+    steps = [step.title for step in briefing.recommended_steps]
+
+    assert titles.count("Inspect failed GitHub Actions test check") == 1
+    assert steps.count("Inspect failed GitHub Actions test check") == 1
+    assert len([id for id in briefing.provenance.ci_item_ids if "github actions:test" in id]) == 2
+    assert briefing.review_focus[0].description == "2 test checks require review."
+    assert result.merge_risk.score == calculate_merge_risk(result.signals).score
+    assert result.merge_readiness.decision.value == "blocked"
+    assert result.evidence_confidence.score == 100
 
 
 def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:

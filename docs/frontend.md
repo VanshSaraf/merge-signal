@@ -60,7 +60,8 @@ Below the hero, the page uses compact rows to explain merge readiness, risk vers
 5. Bounded loading states keep the user oriented while the request is active.
 6. The request can be cancelled.
 7. Errors are shown with safe, user-readable messages.
-8. Successful responses render the detailed report from real backend data.
+8. If a previous report is visible and the user edits the URL, the retained report is marked as a previous analysis until a successful new analysis replaces it.
+9. Successful responses render the detailed report from real backend data.
 
 The frontend does not use fake pull requests, demo scores, simulated results, raw patch rendering, or credential values.
 
@@ -79,7 +80,7 @@ Most surfaces use small or medium radii, subtle borders, restrained shadows, and
 The current UI is a detailed snapshot report. It shows:
 
 - Review Briefing as the first Overview section, with verdict, headline, focus items, recommended steps, priority files, copyable checklist, and safe links when available
-- repository and PR metadata
+- repository and PR metadata, including `Merged` when GitHub exposes a merge timestamp
 - readiness, risk, confidence, and CI status
 - compact CI surface intelligence with passing, failing, pending, and unknown counts
 - expandable CI surface details with safe direct links when GitHub exposes HTTPS provider URLs
@@ -88,11 +89,11 @@ The current UI is a detailed snapshot report. It shows:
 - merge-risk group and evidence-confidence score breakdowns
 - all ranked files with priority, kind, area, status, context labels, strongest priority reasons, search, sorting, magnitude and review-attention filters, and a detail drawer
 - all review conversations with sanitized bounded plain text, ordered reply timelines, participant names, attention states, lifecycle provenance hidden behind disclosure, explicit verification limits, safe GitHub links, and hidden technical IDs
-- all review signals with severity, category, affected files, collapsible evidence, collapsible limitations, and rule IDs
-- all review actions with priority, category, affected files, related signals, related readiness rules, evidence, limitations, and rule IDs
+- all review signals with severity, category, scope-aware affected labels, collapsible evidence, collapsible limitations, and rule IDs
+- all review actions with priority, category, scope-aware affected labels, related signals, related readiness rules, evidence, limitations, and rule IDs
 - readiness reasons, risk contributions, confidence components, completeness, CI, classification summary, and deduplicated limitations
 
-The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. CI provider labels render provider and check names separately so duplicate labels such as `VercelVercel` are avoided. The file detail drawer shows classification evidence, file context, change magnitude, previous-path classification for renames when available, priority factors, related signal IDs, related review conversations, and limitations; it does not show raw patches. Technical factor IDs remain inside disclosure controls.
+The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. CI provider labels render provider and check names separately with centralized display casing so duplicate labels such as `VercelVercel` are avoided. The file detail drawer shows classification evidence, file context, change magnitude, previous-path classification for renames when available, priority factors, related signal IDs, related review conversations, and limitations; it does not show raw patches. Technical factor IDs remain inside disclosure controls.
 
 It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, formal review-thread resolution detection, generated fixes, semantic code understanding, or GitHub publishing.
 
@@ -100,7 +101,7 @@ It does not yet provide history, comparison, CODEOWNERS, repository policies, re
 
 The UI uses semantic landmarks, labels, visible focus rings, accessible badge text, responsive grids, wrapping file paths, `tablist`/`tab`/`tabpanel` semantics, arrow/Home/End keyboard tab navigation, an Escape-closeable file detail drawer with focus return, and reduced-motion support. Decorative large mascot artwork is hidden from assistive technology.
 
-Layouts are checked against desktop, tablet, and narrow mobile widths. Filters wrap, report navigation remains horizontally usable, file rows collapse into mobile-friendly cards, and the drawer becomes a full-width panel on small screens.
+Layouts are checked against desktop, tablet, and narrow mobile widths. Filters wrap, report navigation becomes a contained mobile tab strip with its own horizontal scrolling, file rows collapse into mobile-friendly cards, and the drawer becomes a full-width panel on small screens.
 
 The mobile landing order is header, product label and headline, explanation, analysis command surface, trust statements, pipeline schematic, capability rows, and trust boundaries. Long pull-request URLs and file paths use wrapping constraints to avoid horizontal scrolling.
 

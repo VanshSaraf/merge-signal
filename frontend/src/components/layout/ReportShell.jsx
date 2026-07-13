@@ -1,10 +1,11 @@
 import { Badge } from "../common/Badge.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
+import { pullRequestStateLabel } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { AssessmentSummaryStrip, ReviewFocusPanel } from "../report/AssessmentRail.jsx";
 import { ReportNavigation } from "../report/ReportNavigation.jsx";
 
-export function ReportShell({ snapshot, activeSection, onSectionChange, children }) {
+export function ReportShell({ snapshot, activeSection, onSectionChange, children, isStale = false }) {
   const metadata = snapshot.metadata;
   const reference = snapshot.reference;
   const readiness = snapshot.merge_readiness;
@@ -14,6 +15,7 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
     <section className="report-shell" aria-label="Pull request analysis report">
       <div className="pull-header">
         <div className="pull-header__main">
+          {isStale && <p className="previous-analysis-label">Previous analysis</p>}
           <p className="repo-breadcrumb">
             <span>{reference.owner}</span>
             <span aria-hidden="true">/</span>
@@ -25,6 +27,7 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
               <span className="pull-number">#{reference.pull_number}</span>
             </h2>
             <Badge tone={toneForLevel(readiness?.decision)}>{titleCase(readiness?.decision)}</Badge>
+            <Badge tone={metadata.merged_at ? "success" : "neutral"}>{pullRequestStateLabel(metadata)}</Badge>
           </div>
           <p className="pull-title">{metadata.title}</p>
         </div>
@@ -36,7 +39,7 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
       <dl className="pull-meta">
         <div><dt>Author</dt><dd>{metadata.author?.login ?? "Unknown"}</dd></div>
         <div><dt>Branches</dt><dd><code>{metadata.head_branch?.ref ?? "unknown"}</code> into <code>{metadata.base_branch?.ref ?? "unknown"}</code></dd></div>
-        <div><dt>State</dt><dd>{metadata.draft ? "Draft" : titleCase(metadata.state)}</dd></div>
+        <div><dt>State</dt><dd aria-label={`Pull request state: ${pullRequestStateLabel(metadata)}`}>{pullRequestStateLabel(metadata)}</dd></div>
         <div><dt>Changed files</dt><dd>{formatNumber(metadata.changed_files)}</dd></div>
       </dl>
 

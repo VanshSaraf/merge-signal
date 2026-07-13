@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
+
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App.jsx";
+
+const stylesText = readFileSync("src/styles.css", "utf-8");
 
 const validUrl = "https://github.com/octocat/Hello-World/pull/42";
 
@@ -825,7 +829,7 @@ function auditedReviewerFlowSnapshot() {
     review_action_summary: { total_actions: 3, limitations: [] },
     review_briefing: {
       status: "blocked",
-      headline: "Blocked by failed vercel authorization/configuration check.",
+      headline: "Blocked by failed Vercel authorization/configuration check.",
       summary: "Blocked readiness; 25/100 merge risk; 100/100 evidence confidence; 2 review focus items; start with app/(secure)/admin/projects/[projectId]/page.tsx.",
       primary_reason: {
         title: "Inspect failed Vercel authorization/configuration check",
@@ -1148,7 +1152,7 @@ describe("App", () => {
         review_briefing: {
           ...snapshotResponse().review_briefing,
           status: "blocked",
-          headline: "Blocked by failed vercel authorization/configuration check.",
+          headline: "Blocked by failed Vercel authorization/configuration check.",
           summary: "Blocked readiness; 42/100 merge risk; 86/100 evidence confidence; 1 review focus item.",
           primary_reason: {
             title: "Inspect failed Vercel authorization/configuration check",
@@ -1215,7 +1219,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByRole("heading", { name: /Blocked because Vercel authorization\/configuration check is failing/i })).toBeInTheDocument();
-    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Blocked by failed vercel authorization/configuration check.");
+    expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Blocked by failed Vercel authorization/configuration check.");
     expect(screen.getByRole("link", { name: "Open blocking check" })).toHaveAttribute("href", "https://vercel.com/git/authorize?repo=octocat");
     expect(screen.getByRole("region", { name: "CI surface summary" })).toHaveTextContent("2 checks passed");
     expect(screen.getByRole("region", { name: "CI surface summary" })).not.toHaveTextContent("VercelVercel");
@@ -1252,7 +1256,7 @@ describe("App", () => {
     expect(screen.getAllByText("100/100").length).toBeGreaterThan(0);
 
     const briefing = screen.getByLabelText("Review briefing");
-    expect(briefing).toHaveTextContent("Blocked by failed vercel authorization/configuration check.");
+    expect(briefing).toHaveTextContent("Blocked by failed Vercel authorization/configuration check.");
     expect(briefing).toHaveTextContent("Inspect failed Vercel authorization/configuration check");
     expect(briefing).toHaveTextContent("Verify the author response");
     expect(briefing).toHaveTextContent("Review production change test evidence");
@@ -1788,9 +1792,9 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByText("Plain frontend cleanup")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Overview" }));
     expect(screen.getByLabelText("Review briefing")).toHaveTextContent("Ready based on the currently visible evidence.");
     expect(screen.getByLabelText("Review briefing")).not.toHaveTextContent("backend/app/security/secrets.py");
-    await user.click(screen.getByRole("tab", { name: "Overview" }));
     expect(screen.getByLabelText("Review focus")).toHaveTextContent("frontend/src/App.jsx");
     expect(screen.getByLabelText("Review focus")).not.toHaveTextContent("backend/app/security/secrets.py");
     await user.click(screen.getByRole("tab", { name: "Reviews" }));
@@ -1801,6 +1805,73 @@ describe("App", () => {
       expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();
     });
     expect(screen.getByText("Review highest-priority files")).toBeInTheDocument();
+  });
+
+  it("marks a retained report as previous analysis after invalid input and clears it on success", async () => {
+    const user = userEvent.setup();
+    const secondUrl = "https://github.com/sample-org/review-console/pull/43";
+    const firstSnapshot = snapshotResponse({
+      reference: {
+        owner: "sample-org",
+        repository: "review-console",
+        pull_number: 42,
+        canonical_url: "https://github.com/sample-org/review-console/pull/42",
+      },
+      metadata: {
+        ...snapshotResponse().metadata,
+        title: "Initial generic report",
+      },
+    });
+    const secondSnapshot = snapshotResponse({
+      reference: {
+        owner: "sample-org",
+        repository: "review-console",
+        pull_number: 43,
+        canonical_url: secondUrl,
+      },
+      metadata: {
+        ...snapshotResponse().metadata,
+        title: "Replacement generic report",
+        state: "closed",
+        merged_at: "2026-07-12T12:00:00Z",
+      },
+    });
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      const snapshotCalls = global.fetch.mock.calls.filter(([calledUrl]) => String(calledUrl).includes("/snapshot")).length;
+      return okSnapshot(snapshotCalls === 1 ? firstSnapshot : secondSnapshot);
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), "https://github.com/sample-org/review-console/pull/42");
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+    expect(await screen.findByText("Initial generic report")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("GitHub PR URL"));
+    await user.type(screen.getByLabelText("GitHub PR URL"), "https://github.com/sample-org/review-console");
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByText("Invalid pull-request URL")).toBeInTheDocument();
+    expect(screen.getAllByText("Previous analysis").length).toBeGreaterThan(0);
+    expect(screen.getByText(/sample-org\/review-console #42/i)).toBeInTheDocument();
+    expect(screen.getByText("Initial generic report")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("GitHub PR URL"));
+    await user.type(screen.getByLabelText("GitHub PR URL"), secondUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByText("Replacement generic report")).toBeInTheDocument();
+    expect(screen.queryByText("Previous analysis")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Pull request state: Merged")).toHaveTextContent("Merged");
+  });
+
+  it("keeps report navigation configured for contained mobile scrolling", () => {
+    expect(stylesText).toContain("overflow-x: auto");
+    expect(stylesText).toContain("overscroll-behavior-inline: contain");
+    expect(stylesText).toContain("min-width: max-content");
+    expect(stylesText).toContain("overflow-x: clip");
   });
 
   it("renders empty report section states and unknown enum fallbacks", async () => {

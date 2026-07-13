@@ -7,6 +7,7 @@ export function usePullRequestAnalysis() {
   const [state, setState] = useState({
     status: "idle",
     snapshot: null,
+    previousSnapshot: null,
     error: null,
     lastUrl: "",
   });
@@ -15,17 +16,23 @@ export function usePullRequestAnalysis() {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setState({ status: "loading", snapshot: null, error: null, lastUrl: url });
+    setState((current) => ({
+      status: "loading",
+      snapshot: null,
+      previousSnapshot: current.snapshot ?? current.previousSnapshot,
+      error: null,
+      lastUrl: url,
+    }));
 
     try {
       const snapshot = await fetchPullRequestSnapshot(url, { signal: controller.signal });
-      setState({ status: "success", snapshot, error: null, lastUrl: url });
+      setState({ status: "success", snapshot, previousSnapshot: null, error: null, lastUrl: url });
     } catch (error) {
       if (error.name === "AbortError") {
         setState((current) => ({ ...current, status: "idle", error: null }));
         return;
       }
-      setState({ status: "error", snapshot: null, error, lastUrl: url });
+      setState((current) => ({ status: "error", snapshot: null, previousSnapshot: current.previousSnapshot, error, lastUrl: url }));
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;

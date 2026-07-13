@@ -47,9 +47,9 @@ Focus items are ordered by deterministic precedence:
 10. production changes without test-file changes through existing actions
 11. lower-priority reviewer guidance
 
-The implementation deduplicates related evidence so a failing CI readiness reason, specific CI blocking item, CI signal, and CI action normally become one focus item. CI deduplication uses a canonical evidence identity derived from source type, normalized provider, normalized check or context name, and the safe details URL when present. Distinct failing checks keep distinct identities and remain separate.
+The implementation deduplicates related evidence so a failing CI readiness reason, specific CI blocking item, CI signal, and CI action normally become one focus item. CI deduplication uses a canonical concern identity derived from source type, normalized provider, CI category, normalized check identity, readiness rule IDs, action IDs, safe paths, and action category. Equivalent failures from the same provider and category are grouped when the reviewer action is identical, while genuinely distinct provider/category failures remain separate. Provenance from grouped sources is retained.
 
-When a specific top-file step is available, the briefing suppresses the generic `Review highest-priority files` step for the same path. The explicit file step uses the canonical ranked-file path and may include compact context such as protected admin route, large change, review conversations, and missing paired test-file changes. This keeps the checklist focused without hiding the underlying ranked file or review-action data.
+When a specific top-file step is available, the briefing suppresses the generic `Review highest-priority files` step for the same path. The explicit file step uses the canonical ranked-file path and may include compact context such as protected admin route, large change, review conversations, and missing paired test-file changes. The same exact path is recommended once in the checklist. This keeps the checklist focused without hiding the underlying ranked file or review-action data.
 
 ## Headlines
 

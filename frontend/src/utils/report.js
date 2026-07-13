@@ -91,11 +91,14 @@ export function extractSafeUrl(text) {
 export function providerDisplayName(value) {
   const normalized = String(value ?? "").trim();
   if (!normalized) return "Unknown provider";
-  const lower = normalized.toLowerCase();
-  if (lower === "github actions" || lower === "github-actions") return "GitHub Actions";
+  const lower = normalized.toLowerCase().replaceAll("_", " ").replaceAll("-", " ");
+  if (lower === "github actions") return "GitHub Actions";
   if (lower === "circleci" || lower === "circle ci") return "CircleCI";
   if (lower === "vercel") return "Vercel";
-  return normalized;
+  return lower
+    .split(/\s+/)
+    .map((word) => (["api", "ci", "ui"].includes(word) ? word.toUpperCase() : titleCase(word)))
+    .join(" ");
 }
 
 export function ciItemDisplayParts(item) {
@@ -125,4 +128,30 @@ export function reviewCountLabel(count, unavailable = false) {
   const value = Number(count ?? 0);
   if (value <= 0) return "No inline conversations";
   return `${value} inline ${value === 1 ? "conversation" : "conversations"}`;
+}
+
+export function pullRequestStateLabel(metadata) {
+  if (metadata?.draft) return "Draft";
+  if (metadata?.merged_at) return "Merged";
+  if (metadata?.state === "closed") return "Closed";
+  if (metadata?.state === "open") return "Open";
+  return titleCase(metadata?.state ?? "unknown");
+}
+
+export function scopeLabel(item) {
+  const count = item?.affected_files?.length ?? 0;
+  if (count === 1) return "1 affected file";
+  if (count > 1) return `${count} affected files`;
+  const category = String(item?.category ?? "").toLowerCase();
+  const ruleId = String(item?.rule_id ?? "").toLowerCase();
+  if (category === "ci" || ruleId.startsWith("ci.") || ruleId.includes(".ci_")) return "CI-wide";
+  if (category === "testing" || category === "dependencies" || category === "infrastructure" || category === "configuration") return "Changed-file set";
+  if (category === "file_review") return "Changed-file set";
+  return "PR-wide";
+}
+
+export function snapshotIdentity(snapshot) {
+  const reference = snapshot?.reference;
+  if (!reference) return "";
+  return `${reference.owner}/${reference.repository} #${reference.pull_number}`;
 }

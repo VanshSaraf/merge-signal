@@ -53,20 +53,30 @@ def build_review_briefing(snapshot: PullRequestSnapshot) -> ReviewBriefing:
 
 
 def _ci_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
-    items: list[ReviewBriefingFocusItem] = []
+    grouped: dict[str, list] = {}
     for item in snapshot.ci_explanation.blocking_items:
-        identifier = _canonical_ci_item_id(item)
+        grouped.setdefault(_canonical_ci_concern_key(item), []).append(item)
+    items: list[ReviewBriefingFocusItem] = []
+    for _, ci_items in sorted(grouped.items(), key=lambda entry: entry[0]):
+        item = ci_items[0]
+        identifiers = sorted({_canonical_ci_item_id(candidate) for candidate in ci_items})
         category = _category_label(item.category.value)
-        title = f"Inspect failed {item.provider} check" if category == "unknown" else f"Inspect failed {item.provider} {category} check"
+        provider = _provider_display_name(item.provider)
+        title = f"Inspect failed {provider} check" if category == "unknown" else f"Inspect failed {provider} {category} check"
+        descriptions = sorted({candidate.description for candidate in ci_items if candidate.description})
+        if len(ci_items) > 1:
+            description = f"{len(ci_items)} {category} checks require review."
+        else:
+            description = descriptions[0] if descriptions else f"{item.name} is currently failing."
         items.append(
             ReviewBriefingFocusItem(
                 title=title,
-                description=item.description or f"{item.name} is currently failing.",
+                description=description,
                 severity="high",
                 source_type=BriefingSourceType.CI,
                 affected_files=[],
                 url=_safe_url(item.details_url),
-                provenance=[identifier],
+                provenance=identifiers,
             )
         )
     if not items and snapshot.ci.state == CiState.PENDING:
@@ -228,6 +238,7 @@ def _recommended_steps(
     steps: list[ReviewBriefingStep] = []
     seen: set[str] = set()
     focus_thread_ids = {id for item in focus for id in item.provenance if id.startswith("review-thread-")}
+    used_paths: set[str] = set()
     for item in focus:
         _append_step(
             steps,
@@ -239,6 +250,8 @@ def _recommended_steps(
             url=item.url,
             source_ids=item.provenance,
         )
+        if item.source_type == BriefingSourceType.FILE_PRIORITY:
+            used_paths.update(item.affected_files)
     priority_paths = {file.path for file in priority_files}
     reserved_file_slots = 1 if priority_files else 0
     for action in snapshot.review_actions:
@@ -250,8 +263,10 @@ def _recommended_steps(
             continue
         if len(steps) >= MAX_STEPS - reserved_file_slots:
             break
-        _append_action_step(steps, seen, action)
+        _append_action_step(steps, seen, action, used_paths)
     for file in priority_files:
+        if file.path in used_paths:
+            continue
         _append_step(
             steps,
             seen,
@@ -262,10 +277,11 @@ def _recommended_steps(
             url=file.url,
             source_ids=[file.path],
         )
+        used_paths.add(file.path)
     return [step.model_copy(update={"order": index}) for index, step in enumerate(_dedupe_steps(steps)[:MAX_STEPS], start=1)]
 
 
-def _append_action_step(steps: list[ReviewBriefingStep], seen: set[str], action: ReviewAction) -> None:
+def _append_action_step(steps: list[ReviewBriefingStep], seen: set[str], action: ReviewAction, used_paths: set[str]) -> None:
     url = _url_from_evidence(action.evidence)
     evidence_ids = _review_thread_ids_from_evidence(action.evidence)
     _append_step(
@@ -337,7 +353,7 @@ def _primary_reason(snapshot: PullRequestSnapshot, focus: list[ReviewBriefingFoc
 def _headline(snapshot: PullRequestSnapshot, primary: ReviewBriefingReason | None) -> str:
     status = snapshot.merge_readiness.decision.value
     if primary and primary.source_type == BriefingSourceType.CI and status == "blocked":
-        return f"Blocked by {primary.title.removeprefix('Inspect ').lower()}."
+        return f"Blocked by {_sentence_fragment(primary.title.removeprefix('Inspect '))}."
     if snapshot.ci.state == CiState.PENDING:
         count = snapshot.ci.pending_count or snapshot.ci_explanation.pending_count
         return f"Not ready while {count} {_plural(count, 'check is', 'checks are')} pending."
@@ -351,6 +367,12 @@ def _headline(snapshot: PullRequestSnapshot, primary: ReviewBriefingReason | Non
     if primary:
         return f"{_title_status(status)} because {primary.title.lower()}."
     return f"{_title_status(status)} based on the currently visible evidence."
+
+
+def _sentence_fragment(value: str) -> str:
+    if "GitHub Actions" in value or "Vercel" in value or "CircleCI" in value:
+        return value[:1].lower() + value[1:]
+    return value.lower()
 
 
 def _summary(snapshot: PullRequestSnapshot, focus: list[ReviewBriefingFocusItem], files: list[ReviewBriefingPriorityFile]) -> str:
@@ -397,15 +419,21 @@ def _provenance(
 
 
 def _dedupe_focus(items: list[ReviewBriefingFocusItem]) -> list[ReviewBriefingFocusItem]:
-    deduped: list[ReviewBriefingFocusItem] = []
-    seen: set[str] = set()
+    by_key: dict[str, ReviewBriefingFocusItem] = {}
     for item in sorted(items, key=lambda item: (_source_order(item.source_type), _severity_order(item.severity), item.title, item.affected_files)):
-        key = ",".join(item.provenance) or f"{item.source_type}:{','.join(item.affected_files)}:{item.title}"
-        if key in seen:
+        key = _focus_key(item)
+        existing = by_key.get(key)
+        if existing is None:
+            by_key[key] = item
             continue
-        seen.add(key)
-        deduped.append(item)
-    return deduped
+        by_key[key] = existing.model_copy(
+            update={
+                "affected_files": sorted({*existing.affected_files, *item.affected_files}, key=lambda path: (path.casefold(), path)),
+                "provenance": sorted({*existing.provenance, *item.provenance}),
+                "url": existing.url or item.url,
+            }
+        )
+    return list(by_key.values())
 
 
 def _dedupe_steps(steps: list[ReviewBriefingStep]) -> list[ReviewBriefingStep]:
@@ -422,16 +450,18 @@ def _dedupe_steps(steps: list[ReviewBriefingStep]) -> list[ReviewBriefingStep]:
 
 def _step_key(title: str, category: str, source_ids: list[str], affected_files: list[str]) -> str:
     if category == "ci":
-        ci_ids = sorted(id for id in source_ids if id.startswith("ci:"))
+        ci_ids = sorted(_ci_step_identity(id) for id in source_ids if id.startswith("ci:"))
         if ci_ids:
-            return f"ci:{','.join(ci_ids)}"
+            return f"ci:{ci_ids[0]}"
         return "ci:generic"
     if category in {"review_concern", "review"}:
         thread_ids = sorted(id for id in source_ids if id.startswith("review-thread-"))
         if thread_ids:
             return f"review_concern:{','.join(thread_ids)}"
     normalized_title = title.casefold().replace("the ", "").replace("author's ", "author ")
-    return f"{category}:{normalized_title}:{','.join(source_ids)}:{','.join(affected_files)}"
+    if affected_files:
+        return f"{category}:{normalized_title}:paths:{','.join(sorted(set(affected_files)))}"
+    return f"{category}:{normalized_title}:{','.join(source_ids)}"
 
 
 def _is_generic_ci_action(action: ReviewAction) -> bool:
@@ -559,7 +589,49 @@ def _canonical_ci_item_id(item) -> str:
     provider = str(item.provider or "unknown").strip() or "unknown"
     name = str(item.name or provider).strip() or provider
     detail = _safe_url(item.details_url) or ""
-    return f"ci:{item.source_type.value}:{provider.casefold()}:{name.casefold()}:{detail}"
+    category = str(item.category.value or "unknown")
+    return f"ci:{item.source_type.value}:{provider.casefold()}:{category}:{name.casefold()}:{detail}"
+
+
+def _canonical_ci_concern_key(item) -> str:
+    provider = str(item.provider or "unknown").strip().casefold() or "unknown"
+    category = str(item.category.value or "unknown").strip().casefold() or "unknown"
+    return f"ci:{item.source_type.value}:{provider}:{category}"
+
+
+def _ci_step_identity(identifier: str) -> str:
+    parts = identifier.split(":")
+    if len(parts) >= 5:
+        return ":".join(parts[:4])
+    return identifier
+
+
+def _focus_key(item: ReviewBriefingFocusItem) -> str:
+    if item.source_type == BriefingSourceType.CI:
+        ci_ids = sorted(_ci_step_identity(id) for id in item.provenance if id.startswith("ci:"))
+        return ci_ids[0] if ci_ids else "ci:generic"
+    if item.source_type == BriefingSourceType.FILE_PRIORITY and item.affected_files:
+        return f"file:{item.affected_files[0]}"
+    if item.source_type == BriefingSourceType.REVIEW_CONCERN:
+        if item.title == "Verify the author response":
+            return f"review:{item.title.casefold()}:{','.join(sorted(item.affected_files))}"
+        thread_ids = sorted(id for id in item.provenance if id.startswith("review-thread-"))
+        return f"review:{','.join(thread_ids)}" if thread_ids else f"review:{item.title.casefold()}:{','.join(item.affected_files)}"
+    return f"{item.source_type.value}:{item.title.casefold()}:{','.join(sorted(item.affected_files))}"
+
+
+def _provider_display_name(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "Unknown provider"
+    lower = normalized.casefold().replace("_", " ").replace("-", " ")
+    known = {
+        "github actions": "GitHub Actions",
+        "vercel": "Vercel",
+        "circleci": "CircleCI",
+        "circle ci": "CircleCI",
+    }
+    return known.get(lower, " ".join(word.upper() if word in {"ci", "api"} else word.capitalize() for word in lower.split()))
 
 
 def _severity_order(value: str) -> int:

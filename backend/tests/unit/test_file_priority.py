@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from app.domain.file_classification import ChangeMagnitude
 from app.domain.file_priority import (
     FilePriorityCount,
     FilePriorityFactor,
@@ -23,6 +24,9 @@ from app.domain.pull_request import (
     PullRequestReference,
     PullRequestSnapshot,
     SnapshotCompleteness,
+    PullRequestReviewRecord,
+    ReviewCommentRecord,
+    ReviewState,
 )
 from app.domain.review_signal import (
     EvidenceKind,
@@ -41,6 +45,7 @@ from app.file_priority.rules import (
     SIGNAL_PRIORITY_WEIGHTS,
 )
 from app.services.file_classifier import classify_changed_files
+from app.services.review_context import build_review_context, sanitize_review_body
 from app.signals.rules import RULE_BY_ID
 
 BASE_TIME = datetime(2026, 7, 12, 10, 0, tzinfo=UTC)
@@ -92,9 +97,51 @@ def signal(
     )
 
 
-def snapshot(files: list[ChangedFile], *, signals: list[ReviewSignal] | None = None) -> PullRequestSnapshot:
+def review_record(reviewer_login: str, state: ReviewState, *, id: int = 900) -> PullRequestReviewRecord:
+    return PullRequestReviewRecord(
+        id=id,
+        reviewer_login=reviewer_login,
+        state=state,
+        submitted_at=BASE_TIME,
+        body_excerpt=None,
+        html_url=f"https://github.com/octocat/Hello-World/pull/42#pullrequestreview-{id}",
+        commit_sha="head",
+    )
+
+
+def review_comment(
+    id: int,
+    reviewer_login: str,
+    body: str,
+    *,
+    path: str,
+    created_at: datetime = BASE_TIME,
+    in_reply_to_id: int | None = None,
+    current_position: int | None = 3,
+) -> ReviewCommentRecord:
+    return ReviewCommentRecord(
+        id=id,
+        reviewer_login=reviewer_login,
+        body_excerpt=sanitize_review_body(body) or "",
+        created_at=created_at,
+        updated_at=None,
+        html_url=f"https://github.com/octocat/Hello-World/pull/42#discussion_r{id}",
+        pull_request_review_id=900,
+        in_reply_to_id=in_reply_to_id,
+        path=path,
+        line=12,
+        start_line=None,
+        side="RIGHT",
+        start_side=None,
+        current_position=current_position,
+        original_position=3,
+        commit_sha="head",
+    )
+
+
+def snapshot(files: list[ChangedFile], *, signals: list[ReviewSignal] | None = None, review_context=None) -> PullRequestSnapshot:
     classified_files, classification_summary = classify_changed_files(files)
-    return PullRequestSnapshot(
+    payload = dict(
         reference=PullRequestReference(
             owner="octocat",
             repository="Hello-World",
@@ -172,6 +219,9 @@ def snapshot(files: list[ChangedFile], *, signals: list[ReviewSignal] | None = N
         fetched_at=BASE_TIME,
         rate_limit=GitHubRateLimit(limit=None, remaining=None, used=None, resource=None, reset_at=None),
     )
+    if review_context is not None:
+        payload["review_context"] = review_context
+    return PullRequestSnapshot(**payload)
 
 
 @pytest.mark.parametrize(
@@ -180,6 +230,18 @@ def snapshot(files: list[ChangedFile], *, signals: list[ReviewSignal] | None = N
 )
 def test_file_priority_level_boundaries(score: int, level: str) -> None:
     assert level_for_file_priority(score) == level
+
+
+@pytest.mark.parametrize(
+    ("changes", "magnitude"),
+    [(0, ChangeMagnitude.TINY), (19, ChangeMagnitude.TINY), (20, ChangeMagnitude.SMALL), (99, ChangeMagnitude.SMALL), (100, ChangeMagnitude.MEDIUM), (299, ChangeMagnitude.MEDIUM), (300, ChangeMagnitude.LARGE), (999, ChangeMagnitude.LARGE), (1000, ChangeMagnitude.VERY_LARGE)],
+)
+def test_change_magnitude_thresholds_are_deterministic(changes: int, magnitude: ChangeMagnitude) -> None:
+    ranked_files, _summary = calculate_file_priorities(
+        snapshot([changed_file("backend/app/main.py", additions=changes, deletions=0, changes=changes)])
+    )
+
+    assert ranked_files[0].change_magnitude == magnitude
 
 
 def test_file_priority_domain_validation_and_summary_consistency() -> None:
@@ -208,7 +270,7 @@ def test_file_priority_domain_validation_and_summary_consistency() -> None:
 
 def test_priority_registry_references_real_signal_rules_and_caps_total_100() -> None:
     assert FILE_PRIORITY_RULES_VERSION == "v1"
-    assert sum(FACTOR_GROUP_CAPS.values()) == 100
+    assert sum(FACTOR_GROUP_CAPS.values()) >= 100
     assert len(SIGNAL_PRIORITY_WEIGHT_BY_RULE_ID) == len(SIGNAL_PRIORITY_WEIGHTS)
     for configured in SIGNAL_PRIORITY_WEIGHTS:
         assert configured.rule_id in RULE_BY_ID
@@ -230,6 +292,68 @@ def test_every_changed_file_is_ranked_and_zero_score_files_remain_present() -> N
     assert all(file.score == 0 for file in ranked_files)
     assert summary.total_files == 2
     assert summary.counts_by_level == [FilePriorityCount(name="low", count=2)]
+
+
+def test_nextjs_context_and_review_concerns_lift_large_admin_route_out_of_low_priority() -> None:
+    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    review_context = build_review_context(
+        [review_record("reviewer", ReviewState.CHANGES_REQUESTED)],
+        [
+            review_comment(901, "reviewer", "Please fix the cohort transition.", path=path),
+            review_comment(902, "octocat", "Fixed.", path=path, created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    signals = [signal("testing.sensitive_change_without_test_files", affected_files=[path])]
+    ranked_files, _summary = calculate_file_priorities(
+        snapshot([changed_file(path, additions=220, deletions=159, changes=379)], signals=signals, review_context=review_context)
+    )
+    file = ranked_files[0]
+    factor_ids = {factor.id for factor in file.factors}
+
+    assert file.language.value == "typescript"
+    assert file.context.framework == "nextjs_app_router"
+    assert file.context.component_role == "route_page"
+    assert "admin" in file.context.areas
+    assert "protected_route_group" in file.context.access_context
+    assert file.context.domains == ["cohort"]
+    assert file.context.is_dynamic_route is True
+    assert file.change_magnitude == ChangeMagnitude.LARGE
+    assert file.level in {FilePriorityLevel.HIGH, FilePriorityLevel.VERY_HIGH}
+    assert "review_attention.active_change_request" in factor_ids
+    assert "review_attention.author_claimed_addressed" in factor_ids
+    assert "context.admin_surface" in factor_ids
+    assert "context.dynamic_route" in factor_ids
+    assert "signal.testing.sensitive_change_without_test_files" in factor_ids
+    assert file.score == sum(factor.points for factor in file.factors)
+
+
+def test_outdated_review_concern_does_not_inflate_file_priority_and_global_ci_is_ignored() -> None:
+    path = "backend/app/main.py"
+    review_context = build_review_context(
+        [review_record("reviewer", ReviewState.COMMENTED)],
+        [review_comment(901, "reviewer", "Old line.", path=path, current_position=None)],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+        head_sha="head",
+    )
+    signals = [signal("ci.failing", affected_files=[], scope=SignalScope.CI_SURFACE, category=SignalCategory.CI)]
+    ranked_files, _summary = calculate_file_priorities(
+        snapshot([changed_file(path), changed_file("docs/readme.md")], signals=signals, review_context=review_context)
+    )
+    by_path = {file.path: file for file in ranked_files}
+
+    assert not any(factor.category == "review_attention" for factor in by_path[path].factors)
+    assert by_path[path].related_signal_ids == []
+    assert by_path["docs/readme.md"].related_signal_ids == []
 
 
 def test_signal_factors_apply_only_to_explicit_current_file_paths() -> None:

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { filterActions, filterFiles, filterSignals, sortFiles } from "../utils/report.js";
 
-const initialFileFilters = { query: "", level: "", kind: "", area: "", status: "", sort: "rank" };
+const initialFileFilters = { query: "", level: "", kind: "", area: "", status: "", magnitude: "", reviewAttention: "", sort: "rank" };
 const initialSignalFilters = { severity: "", category: "", fileQuery: "" };
 const initialActionFilters = { priority: "", category: "", fileQuery: "" };
 

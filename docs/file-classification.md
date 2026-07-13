@@ -10,6 +10,7 @@ Classification currently supports:
 - Functional areas, such as frontend, backend, API, authentication, authorization, database, dependencies, CI/CD, infrastructure, testing, documentation, configuration, generated, security, and build tooling.
 - Language or technology labels for common source, configuration, markup, infrastructure, and schema file extensions.
 - Matched rule evidence with stable rule identifiers.
+- A typed `context` object derived from observable path structure.
 - Safe warnings for unknown classifications and unusual path shapes.
 - Previous-path classification for renamed files.
 - Pull-request-level summary counts across changed files.
@@ -40,6 +41,38 @@ This precedence lets specialized files remain specialized when multiple rules ma
 
 Input paths are treated as untrusted repository-relative strings. The classifier normalizes matching with case-folding and forward-slash segments, but it never resolves paths. It emits warnings for unusually long paths, literal backslashes, leading slashes, repeated separators, control characters, and dot navigation segments.
 
+## Path Context
+
+`classification.context` adds bounded, path-derived context:
+
+- `framework`, such as `nextjs_app_router` when an `app/**` route convention is visible.
+- `component_role`, such as `route_page`, `route_layout`, `route_handler`, `loading_boundary`, `error_boundary`, `not_found_boundary`, `frontend_component`, `backend_controller`, or `backend_service`.
+- `route_context`, including route groups and dynamic route markers.
+- `access_context`, including observable protected route-group names.
+- `domains`, extracted from meaningful path segments after reserved framework and generic segments are removed.
+- boolean flags for user-facing, dynamic route, test, generated, configuration, documentation, and database-change context.
+- context evidence and confidence.
+
+Supported Next.js App Router conventions include:
+
+- `app/**/page.js|jsx|ts|tsx`: route page
+- `app/**/layout.*`: route layout
+- `app/**/route.*`: route handler
+- `app/**/loading.*`: loading boundary
+- `app/**/error.*`: error boundary
+- `app/**/not-found.*`: not-found boundary
+- `[id]`, `[slug]`, and `[...path]`: dynamic route segments
+- `(protected)`: route group and observable protected-route context
+- `admin`: admin path context
+
+Route groups and dynamic parameters are not product domains. MergeSignal does not infer authentication, public accessibility, or security guarantees from directory names.
+
+## Domain Extraction
+
+Domain extraction removes filenames, extensions, route groups, dynamic parameters, and generic segments such as `src`, `app`, `pages`, `components`, `lib`, `utils`, `services`, `api`, `tests`, and `test`.
+
+For example, `app/(protected)/admin/cohort/[id]/page.tsx` produces domain `cohort`, admin/frontend context, protected route-group context, dynamic route context, and route-page role. It does not produce `(protected)`, `admin`, `[id]`, or `page` as product domains.
+
 ## API Shape
 
 Each changed file in a snapshot includes:
@@ -64,3 +97,5 @@ Evidence confidence uses classification coverage as one visibility component. A 
 The classification output feeds deterministic review-signal detection, merge-risk scoring, evidence-confidence scoring, merge-readiness decisions, and changed-file prioritization today. It is intended to feed later CODEOWNERS and policy evaluation. Later stages should consume the classification evidence instead of duplicating path heuristics inside route handlers.
 
 The current review-signal engine consumes file kind, functional areas, language, matched rename classifications, and missing-patch context as snapshot evidence. Classification remains descriptive metadata; signals do not reinterpret classification as proof that a change is safe or unsafe.
+
+Path context is not semantic code understanding. It uses only repository-relative path strings and existing changed-file metadata.

@@ -61,7 +61,9 @@ HTTP request
 
 The file classifier lives in `app/services/file_classifier.py` with rule data isolated in `app/services/file_classification_rules.py`. It accepts repository path strings from normalized changed files, returns strict domain models, and does not access the filesystem, network, repository contents, or local dependencies.
 
-Classification output includes primary file kind, functional areas, language, matched rule evidence, safe warnings, previous-path classification for renames, and a pull-request-level summary. This is snapshot metadata only; it is not a merge-readiness decision or risk score.
+Classification output includes primary file kind, functional areas, language, path-derived file context, matched rule evidence, safe warnings, previous-path classification for renames, and a pull-request-level summary. This is snapshot metadata only; it is not a merge-readiness decision or risk score.
+
+Path context recognizes bounded conventions such as Next.js App Router pages, layouts, route handlers, route groups, dynamic route segments, admin surfaces, frontend components, backend route/controller/service paths, tests, migrations, CI workflows, configuration, documentation, and generated or lock files. It does not read file contents or infer semantics beyond observable path structure.
 
 ## Review Signal Engine
 
@@ -108,7 +110,7 @@ The engine returns exactly one decision: `ready`, `ready_with_caution`, `not_rea
 
 The file-priority engine lives under `app/file_priority/` and consumes the in-memory snapshot after readiness has been calculated. It returns `ranked_files` and `file_priority_summary`, and it does not change classifications, review signals, merge risk, evidence confidence, readiness, CI, or completeness.
 
-File priority is separate from merge risk. It is a deterministic review-ordering heuristic for changed files, not a probability, defect score, recommendation engine, reviewer assignment engine, CODEOWNERS evaluator, or policy evaluator. It performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
+File priority is separate from merge risk. It is a deterministic review-ordering heuristic for changed files, not a probability, defect score, recommendation engine, reviewer assignment engine, CODEOWNERS evaluator, or policy evaluator. It uses path context, change magnitude, file-specific signals, review-concern lifecycle evidence, visibility, sensitive areas, and rename evidence. It performs no filesystem access, no network access, no additional GitHub requests, no repository execution, and no dependency installation.
 
 ## Review-Action Engine
 

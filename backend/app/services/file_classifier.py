@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from app.domain.file_classification import (
     ClassificationCount,
     ClassificationMatch,
+    FileContext,
     FileArea,
     FileClassification,
     FileClassificationSummary,
@@ -61,13 +62,21 @@ def classify_path(filename: str) -> FileClassification:
         warnings.append("No explicit file-kind rule matched.")
     if language == FileLanguage.UNKNOWN:
         warnings.append("No explicit language rule matched.")
+    context = _build_file_context(info, primary_kind, sorted(areas, key=lambda area: area.value), language)
+    if "frontend" in context.areas:
+        areas.add(FileArea.FRONTEND)
+    if "api" in context.areas:
+        areas.add(FileArea.API)
+    if context.is_database_change:
+        areas.add(FileArea.DATABASE)
 
     return FileClassification(
         primary_kind=primary_kind,
         areas=sorted(areas, key=lambda area: area.value),
         language=language,
+        context=context,
         matches=sorted(matches.values(), key=lambda match: (match.rule_id, match.match_type, match.value)),
-        warnings=_unique_sorted(warnings),
+        warnings=_unique_sorted([*warnings, *context.warnings]),
     )
 
 
@@ -213,3 +222,159 @@ def _counts_for(enum_type, counts: Counter) -> list[ClassificationCount]:
 
 def _unique_sorted(values: list[str] | tuple[str, ...]) -> list[str]:
     return sorted(set(values))
+
+
+NEXT_ROUTE_FILENAMES = {
+    "page": "route_page",
+    "layout": "route_layout",
+    "route": "route_handler",
+    "loading": "loading_boundary",
+    "error": "error_boundary",
+    "not-found": "not_found_boundary",
+}
+
+RESERVED_DOMAIN_SEGMENTS = {
+    "src",
+    "app",
+    "pages",
+    "components",
+    "component",
+    "lib",
+    "libs",
+    "utils",
+    "util",
+    "services",
+    "service",
+    "api",
+    "tests",
+    "test",
+    "__tests__",
+    "fixtures",
+    "fixture",
+    "hooks",
+    "styles",
+    "public",
+    "server",
+    "client",
+    "backend",
+    "frontend",
+    "admin",
+    "auth",
+    "database",
+    "db",
+}
+
+GENERIC_FILENAMES = {
+    "index",
+    "main",
+    "page",
+    "layout",
+    "route",
+    "loading",
+    "error",
+    "not-found",
+}
+
+
+def _build_file_context(info: PathInfo, kind: FileKind, areas: list[FileArea], language: FileLanguage) -> FileContext:
+    evidence: list[ClassificationMatch] = []
+    context_areas = {area.value for area in areas}
+    route_context: set[str] = set()
+    access_context: set[str] = set()
+    domains = _extract_domains(info)
+    stem = info.filename.rsplit(".", 1)[0] if "." in info.filename else info.filename
+    framework = None
+    component_role = None
+    is_dynamic_route = any(_is_dynamic_segment(segment) for segment in info.segments)
+    is_next_app_path = bool(info.segments and info.segments[0] == "app" and stem in NEXT_ROUTE_FILENAMES)
+
+    if is_next_app_path:
+        framework = "nextjs_app_router"
+        component_role = NEXT_ROUTE_FILENAMES[stem]
+        route_context.add("application_route")
+        context_areas.add("frontend")
+        evidence.append(_context_match("context.nextjs_app_router", "path_prefix", "app/", "Next.js App Router path convention."))
+        evidence.append(_context_match(f"context.nextjs.{component_role}", "filename", info.filename, f"Next.js {component_role.replace('_', ' ')} file."))
+    elif any(segment in {"components", "component"} for segment in info.segments) and language in {FileLanguage.JAVASCRIPT, FileLanguage.TYPESCRIPT}:
+        component_role = "frontend_component"
+        context_areas.add("frontend")
+        evidence.append(_context_match("context.frontend_component", "path_segment", "components", "Frontend component path convention."))
+    elif any(segment in {"controllers", "controller", "routes", "routers"} for segment in info.segments):
+        component_role = "backend_controller"
+        context_areas.add("backend")
+        context_areas.add("api")
+        evidence.append(_context_match("context.backend_controller", "path_segment", "routes", "Backend route/controller path convention."))
+    elif any(segment in {"services", "service"} for segment in info.segments):
+        component_role = "backend_service"
+        context_areas.add("backend")
+        evidence.append(_context_match("context.backend_service", "path_segment", "services", "Backend service path convention."))
+
+    for segment in info.segments:
+        if segment.startswith("(") and segment.endswith(")"):
+            label = segment[1:-1]
+            route_context.add(f"route_group:{label}")
+            evidence.append(_context_match("context.route_group", "path_segment", segment, "Next.js route group segment."))
+            if label in {"protected", "private", "authenticated", "auth"}:
+                access_context.add("protected_route_group")
+                evidence.append(_context_match("context.access.protected_route_group", "path_segment", segment, "Observable protected route group name."))
+        if _is_dynamic_segment(segment):
+            route_context.add("dynamic_route")
+            evidence.append(_context_match("context.dynamic_route", "path_segment", segment, "Dynamic route parameter segment."))
+        if segment == "admin":
+            context_areas.add("admin")
+            evidence.append(_context_match("context.area.admin", "path_segment", "admin", "Admin path segment."))
+        if segment == "api":
+            context_areas.add("api")
+
+    is_user_facing = bool(framework == "nextjs_app_router" and component_role in {"route_page", "route_layout", "loading_boundary", "error_boundary", "not_found_boundary"})
+    confidence = "high" if evidence else ("medium" if kind != FileKind.UNKNOWN or language != FileLanguage.UNKNOWN else "low")
+    return FileContext(
+        framework=framework,
+        component_role=component_role,
+        route_context=_unique_sorted(tuple(route_context)),
+        access_context=_unique_sorted(tuple(access_context)),
+        domains=domains,
+        areas=_unique_sorted(tuple(context_areas)),
+        is_user_facing=is_user_facing,
+        is_dynamic_route=is_dynamic_route,
+        is_test=kind == FileKind.TEST,
+        is_generated=kind in {FileKind.GENERATED, FileKind.BINARY},
+        is_configuration=kind in {FileKind.CONFIGURATION, FileKind.CI_CONFIGURATION, FileKind.DEPENDENCY_MANIFEST, FileKind.DEPENDENCY_LOCKFILE},
+        is_documentation=kind == FileKind.DOCUMENTATION,
+        is_database_change=kind == FileKind.DATABASE_MIGRATION or FileArea.DATABASE in areas,
+        classification_confidence=confidence,
+        evidence=sorted(evidence, key=lambda match: (match.rule_id, match.match_type, match.value)),
+        warnings=[],
+    )
+
+
+def _extract_domains(info: PathInfo) -> list[str]:
+    domains: list[str] = []
+    for segment in info.segments[:-1]:
+        if (
+            not segment
+            or segment in RESERVED_DOMAIN_SEGMENTS
+            or segment.startswith("(")
+            or _is_dynamic_segment(segment)
+            or "." in segment
+        ):
+            continue
+        cleaned = "".join(character for character in segment if character.isalnum() or character in {"-", "_"}).strip("-_")
+        if cleaned and cleaned not in RESERVED_DOMAIN_SEGMENTS and cleaned not in domains:
+            domains.append(cleaned)
+        if len(domains) >= 4:
+            break
+    stem = info.filename.rsplit(".", 1)[0] if "." in info.filename else info.filename
+    if stem not in GENERIC_FILENAMES and stem not in RESERVED_DOMAIN_SEGMENTS and not _is_dynamic_segment(stem):
+        cleaned_stem = "".join(character for character in stem if character.isalnum() or character in {"-", "_"}).strip("-_")
+        if cleaned_stem and cleaned_stem not in domains:
+            domains.append(cleaned_stem)
+    return domains[:4]
+
+
+def _is_dynamic_segment(segment: str) -> bool:
+    return segment.startswith("[") and segment.endswith("]")
+
+
+def _context_match(rule_id: str, match_type: str, value: str, description: str) -> ClassificationMatch:
+    return ClassificationMatch(rule_id=rule_id, match_type=match_type, value=value, description=description)

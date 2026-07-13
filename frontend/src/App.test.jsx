@@ -289,13 +289,52 @@ function snapshotResponse(overrides = {}) {
         deletions: 4,
         areas: ["security", "backend"],
         related_signal_ids: ["sig-security"],
-        factors: [{ id: "signal.security.credential_like_literal_added", points: 25, description: "Credential-like literal pattern affected this file." }],
+        change_magnitude: "tiny",
+        factors: [
+          { id: "signal.security.credential_like_literal_added", category: "signal_impact", points: 25, description: "Credential-like literal pattern affected this file.", evidence: ["Signal rule explicitly affected this file."] },
+          { id: "review_attention.active_change_request", category: "review_attention", points: 16, description: "A reviewer currently requests changes on a conversation touching this file.", related_thread_ids: ["review-thread-601"], evidence: ["1 current review conversation connects to an active latest change request."] },
+        ],
         limitations: ["Ranking does not replace human review."],
-        classification: { matches: [{ rule_id: "area.security.segment", description: "Security-related path segment." }] },
+        classification: { context: { areas: ["security", "backend"], domains: ["secrets"], classification_confidence: "medium", evidence: [] }, matches: [{ rule_id: "area.security.segment", description: "Security-related path segment." }] },
         changes: 14,
       },
       {
         rank: 2,
+        path: "app/(protected)/admin/cohort/[id]/page.tsx",
+        score: 68,
+        level: "high",
+        primary_kind: "source",
+        language: "typescript",
+        status: "modified",
+        additions: 220,
+        deletions: 159,
+        areas: ["frontend"],
+        related_signal_ids: ["sig-config"],
+        change_magnitude: "large",
+        factors: [
+          { id: "context.admin_surface", category: "file_context", points: 8, description: "Path context identifies an admin surface.", evidence: ["Path contains an admin segment."] },
+          { id: "context.dynamic_route", category: "file_context", points: 5, description: "Route contains a dynamic parameter segment.", evidence: ["Path contains a bracketed dynamic route segment."] },
+        ],
+        limitations: [],
+        classification: {
+          context: {
+            framework: "nextjs_app_router",
+            component_role: "route_page",
+            route_context: ["application_route", "dynamic_route", "route_group:protected"],
+            access_context: ["protected_route_group"],
+            domains: ["cohort"],
+            areas: ["admin", "frontend"],
+            is_user_facing: true,
+            is_dynamic_route: true,
+            classification_confidence: "high",
+            evidence: [{ rule_id: "context.nextjs_app_router", description: "Next.js App Router path convention." }],
+          },
+          matches: [],
+        },
+        changes: 379,
+      },
+      {
+        rank: 3,
         path: "backend/app/config/runtime.py",
         score: 45,
         level: "high",
@@ -306,12 +345,14 @@ function snapshotResponse(overrides = {}) {
         deletions: 3,
         areas: ["configuration", "backend"],
         related_signal_ids: ["sig-config"],
+        change_magnitude: "tiny",
         factors: [{ id: "sensitive_area.configuration", points: 5, description: "File is classified in the configuration area." }],
+        classification: { context: { areas: ["configuration", "backend"], is_configuration: true, classification_confidence: "medium", evidence: [] }, matches: [] },
         limitations: [],
         changes: 18,
       },
       {
-        rank: 3,
+        rank: 4,
         path: "backend/app/auth/roles.py",
         previous_path: "tests/test_roles.py",
         score: 38,
@@ -324,6 +365,7 @@ function snapshotResponse(overrides = {}) {
         changes: 10,
         areas: ["authentication", "backend"],
         related_signal_ids: [],
+        change_magnitude: "tiny",
         factors: [{ id: "rename_transition.moved_into_sensitive_area", points: 5, description: "File moved into a sensitive classified area." }],
         limitations: [],
         previous_classification: { primary_kind: "test", areas: ["testing"] },
@@ -886,6 +928,11 @@ describe("App", () => {
     await user.click(await screen.findByRole("tab", { name: "Files" }));
 
     expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
+    expect(screen.getByText("app/(protected)/admin/cohort/[id]/page.tsx")).toBeInTheDocument();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByText("Protected route")).toBeInTheDocument();
+    expect(screen.getByText("Dynamic page")).toBeInTheDocument();
+    expect(screen.getByText(/Path context identifies an admin surface/i)).toBeInTheDocument();
     expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Priority"), "medium");
@@ -905,23 +952,39 @@ describe("App", () => {
     expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.selectOptions(screen.getByLabelText("Magnitude"), "large");
+    expect(screen.getByText("app/(protected)/admin/cohort/[id]/page.tsx")).toBeInTheDocument();
+    expect(screen.queryByText("backend/app/security/secrets.py")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.selectOptions(screen.getByLabelText("Review attention"), "has_attention");
+    expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
+    expect(screen.queryByText("backend/app/config/runtime.py")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
     await user.selectOptions(screen.getByLabelText("Status"), "renamed");
     expect(screen.getByText(/Renamed from tests\/test_roles.py/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     await user.selectOptions(screen.getByLabelText("Sort"), "path");
-    expect(screen.getAllByRole("button", { name: "Details" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Details" })).toHaveLength(4);
 
-    const firstDetailsButton = screen.getAllByRole("button", { name: "Details" })[0];
-    await user.click(firstDetailsButton);
-    expect(screen.getByRole("dialog", { name: /backend\/app/i })).toBeInTheDocument();
+    const routeDetailsButton = screen.getAllByRole("button", { name: "Details" })[0];
+    await user.click(routeDetailsButton);
+    expect(screen.getByRole("dialog", { name: /app\/\(protected\)\/admin/i })).toBeInTheDocument();
     expect(screen.getByText("Priority factors")).toBeInTheDocument();
+    expect(screen.getByText("File context")).toBeInTheDocument();
+    expect(screen.getByText(/Framework: Nextjs App Router/i)).toBeInTheDocument();
+    expect(screen.getByText(/Domains: cohort/i)).toBeInTheDocument();
+    expect(screen.getByText("context.admin_surface")).not.toBeVisible();
+    await user.click(screen.getByText("Technical factor details"));
+    expect(screen.getByText("context.admin_surface")).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    expect(document.activeElement).toBe(firstDetailsButton);
+    expect(document.activeElement).toBe(routeDetailsButton);
   });
 
   it("shows empty file filter results", async () => {

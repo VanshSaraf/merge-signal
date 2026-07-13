@@ -1532,6 +1532,13 @@ input:disabled {
   grid-template-columns: 54px minmax(0, 1.7fr) auto minmax(170px, auto) auto auto;
 }
 
+.context-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: var(--space-1);
+}
+
 .rank {
   color: var(--accent-2);
   font-weight: 900;
@@ -1762,6 +1769,12 @@ code {
 .factor-list p {
   color: var(--text-2);
   margin: var(--space-1) 0 0;
+}
+
+.factor-list small {
+  color: var(--text-3);
+  display: block;
+  margin-top: 0.2rem;
 }
 
 .limitation-list {

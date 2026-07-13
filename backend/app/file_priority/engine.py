@@ -1,8 +1,8 @@
 from collections import defaultdict
 
-from app.domain.file_classification import FileKind
+from app.domain.file_classification import ChangeMagnitude, FileKind
 from app.domain.file_priority import FilePriorityFactor, FilePriorityLevel, FilePrioritySummary, RankedFile
-from app.domain.pull_request import ChangedFile, PullRequestSnapshot
+from app.domain.pull_request import ChangedFile, PullRequestSnapshot, ReviewConcernAttentionState, ReviewThreadRecord
 from app.domain.review_signal import ReviewSignal
 from app.file_priority.ordering import LEVEL_ORDER, unique_sorted
 from app.file_priority.rules import (
@@ -39,8 +39,9 @@ def level_for_file_priority(score: int) -> FilePriorityLevel:
 
 def calculate_file_priorities(snapshot: PullRequestSnapshot) -> tuple[list[RankedFile], FilePrioritySummary]:
     signals_by_file = _signals_by_file(snapshot.signals)
+    threads_by_file = _threads_by_file(snapshot.review_context.threads)
     unranked = [
-        _ranked_file_without_rank(file, signals_by_file.get(file.filename, []))
+        _ranked_file_without_rank(file, signals_by_file.get(file.filename, []), threads_by_file.get(file.filename, []))
         for file in snapshot.files
     ]
     ordered = sorted(
@@ -60,10 +61,12 @@ def calculate_file_priorities(snapshot: PullRequestSnapshot) -> tuple[list[Ranke
     return ranked, summarize_file_priorities(ranked)
 
 
-def _ranked_file_without_rank(file: ChangedFile, signals: list[ReviewSignal]) -> RankedFile:
+def _ranked_file_without_rank(file: ChangedFile, signals: list[ReviewSignal], threads: list[ReviewThreadRecord]) -> RankedFile:
     factors = _apply_group_caps(
         [
+            *_review_attention_factors(file, threads),
             *_signal_factors(file, signals),
+            *_file_context_factors(file),
             *_sensitive_area_factors(file),
             *_change_size_factors(file),
             *_visibility_factors(file),
@@ -81,6 +84,8 @@ def _ranked_file_without_rank(file: ChangedFile, signals: list[ReviewSignal]) ->
         primary_kind=file.classification.primary_kind,
         areas=file.classification.areas,
         language=file.classification.language,
+        context=file.classification.context,
+        change_magnitude=change_magnitude_for_changes(_file_changes(file)),
         changes=_file_changes(file),
         additions=max(file.additions, 0),
         deletions=max(file.deletions, 0),
@@ -105,7 +110,140 @@ def _signal_factors(file: ChangedFile, signals: list[ReviewSignal]) -> list[File
                 points=weight.points,
                 description=weight.description,
                 related_signal_ids=unique_sorted([item.id for item in signals if item.rule_id == signal.rule_id]),
+                evidence=[f"Signal rule {signal.rule_id} explicitly affected {file.filename}."],
                 observed_value=signal.rule_id,
+            )
+        )
+    return factors
+
+
+def _review_attention_factors(file: ChangedFile, threads: list[ReviewThreadRecord]) -> list[FilePriorityFactor]:
+    if not threads:
+        return []
+    current_threads = [thread for thread in threads if thread.lifecycle.attention_state != ReviewConcernAttentionState.OUTDATED]
+    if not current_threads:
+        return []
+    factors: list[FilePriorityFactor] = []
+    if any(thread.lifecycle.has_reviewer_follow_up for thread in current_threads):
+        related = [thread.id for thread in current_threads if thread.lifecycle.has_reviewer_follow_up]
+        factors.append(
+            FilePriorityFactor(
+                id="review_attention.reviewer_follow_up",
+                category="review_attention",
+                points=18,
+                description="A reviewer followed up after the latest author response on this file.",
+                related_signal_ids=[],
+                related_thread_ids=unique_sorted(related),
+                evidence=[f"{len(related)} current review conversation(s) have reviewer follow-up."],
+                observed_value="reviewer_follow_up",
+            )
+        )
+    if any(thread.lifecycle.active_latest_change_request for thread in current_threads):
+        related = [thread.id for thread in current_threads if thread.lifecycle.active_latest_change_request]
+        factors.append(
+            FilePriorityFactor(
+                id="review_attention.active_change_request",
+                category="review_attention",
+                points=16,
+                description="A reviewer currently requests changes on a conversation touching this file.",
+                related_signal_ids=[],
+                related_thread_ids=unique_sorted(related),
+                evidence=[f"{len(related)} current review conversation(s) connect to an active latest change request."],
+                observed_value="active_change_request",
+            )
+        )
+    if any(thread.lifecycle.attention_state == ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE for thread in current_threads):
+        related = [thread.id for thread in current_threads if thread.lifecycle.attention_state == ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE]
+        factors.append(
+            FilePriorityFactor(
+                id="review_attention.awaiting_author_response",
+                category="review_attention",
+                points=10,
+                description="A reviewer concern on this file is awaiting an author response.",
+                related_signal_ids=[],
+                related_thread_ids=unique_sorted(related),
+                evidence=[f"{len(related)} current review conversation(s) await an author response."],
+                observed_value="awaiting_author_response",
+            )
+        )
+    if any(thread.lifecycle.author_claimed_addressed for thread in current_threads):
+        related = [thread.id for thread in current_threads if thread.lifecycle.author_claimed_addressed]
+        factors.append(
+            FilePriorityFactor(
+                id="review_attention.author_claimed_addressed",
+                category="review_attention",
+                points=6,
+                description="The author claimed a concern on this file was addressed; reviewer verification is still needed.",
+                related_signal_ids=[],
+                related_thread_ids=unique_sorted(related),
+                evidence=[f"{len(related)} current review conversation(s) include an author-addressed claim."],
+                observed_value="author_claimed_addressed",
+            )
+        )
+    return factors
+
+
+def _file_context_factors(file: ChangedFile) -> list[FilePriorityFactor]:
+    context = file.classification.context
+    factors: list[FilePriorityFactor] = []
+    if "admin" in context.areas:
+        factors.append(
+            FilePriorityFactor(
+                id="context.admin_surface",
+                category="file_context",
+                points=8,
+                description="Path context identifies an admin surface.",
+                related_signal_ids=[],
+                evidence=["Path contains an admin segment."],
+                observed_value="admin",
+            )
+        )
+    if "protected_route_group" in context.access_context:
+        factors.append(
+            FilePriorityFactor(
+                id="context.protected_route_group",
+                category="file_context",
+                points=7,
+                description="Path context identifies a protected route group.",
+                related_signal_ids=[],
+                evidence=["Route group name is observable as protected context."],
+                observed_value="protected_route_group",
+            )
+        )
+    if context.component_role == "route_page":
+        factors.append(
+            FilePriorityFactor(
+                id="context.route_page",
+                category="file_context",
+                points=6,
+                description="File is a route page component.",
+                related_signal_ids=[],
+                evidence=["Next.js App Router page file convention."],
+                observed_value="route_page",
+            )
+        )
+    if context.is_dynamic_route:
+        factors.append(
+            FilePriorityFactor(
+                id="context.dynamic_route",
+                category="file_context",
+                points=5,
+                description="Route contains a dynamic parameter segment.",
+                related_signal_ids=[],
+                evidence=["Path contains a bracketed dynamic route segment."],
+                observed_value="dynamic_route",
+            )
+        )
+    if context.is_user_facing:
+        factors.append(
+            FilePriorityFactor(
+                id="context.user_facing",
+                category="file_context",
+                points=4,
+                description="Path convention suggests user-facing frontend behavior.",
+                related_signal_ids=[],
+                evidence=["Route page/layout/boundary convention."],
+                observed_value="user_facing",
             )
         )
     return factors
@@ -141,14 +279,15 @@ def _sensitive_area_factors(file: ChangedFile) -> list[FilePriorityFactor]:
 
 def _change_size_factors(file: ChangedFile) -> list[FilePriorityFactor]:
     changes = _file_changes(file)
+    magnitude = change_magnitude_for_changes(changes)
     points = 0
-    if changes >= 1000:
+    if magnitude == ChangeMagnitude.VERY_LARGE:
         points = 15
-    elif changes >= 500:
+    elif magnitude == ChangeMagnitude.LARGE:
         points = 12
-    elif changes >= 200:
+    elif magnitude == ChangeMagnitude.MEDIUM:
         points = 8
-    elif changes >= 50:
+    elif magnitude == ChangeMagnitude.SMALL:
         points = 4
     if points == 0:
         return []
@@ -157,8 +296,9 @@ def _change_size_factors(file: ChangedFile) -> list[FilePriorityFactor]:
             id="change_size.changed_lines",
             category="change_size",
             points=points,
-            description="Changed-line count increases review priority for this file.",
+            description=f"Changed-line count is {magnitude.value}.",
             related_signal_ids=[],
+            evidence=[f"{changes} additions plus deletions."],
             observed_value=str(changes),
         )
     ]
@@ -271,5 +411,28 @@ def _signals_by_file(signals: list[ReviewSignal]) -> dict[str, list[ReviewSignal
     }
 
 
+def _threads_by_file(threads: list[ReviewThreadRecord]) -> dict[str, list[ReviewThreadRecord]]:
+    grouped: dict[str, list[ReviewThreadRecord]] = defaultdict(list)
+    for thread in threads:
+        if thread.path:
+            grouped[thread.path].append(thread)
+    return {
+        path: sorted(items, key=lambda thread: (thread.root_comment.created_at, thread.root_comment_id))
+        for path, items in sorted(grouped.items(), key=lambda item: (item[0].casefold(), item[0]))
+    }
+
+
 def _file_changes(file: ChangedFile) -> int:
     return max(file.changes if file.changes is not None else file.additions + file.deletions, 0)
+
+
+def change_magnitude_for_changes(changes: int) -> ChangeMagnitude:
+    if changes >= 1000:
+        return ChangeMagnitude.VERY_LARGE
+    if changes >= 300:
+        return ChangeMagnitude.LARGE
+    if changes >= 100:
+        return ChangeMagnitude.MEDIUM
+    if changes >= 20:
+        return ChangeMagnitude.SMALL
+    return ChangeMagnitude.TINY

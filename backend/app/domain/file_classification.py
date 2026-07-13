@@ -75,6 +75,14 @@ class FileLanguage(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ChangeMagnitude(StrEnum):
+    TINY = "tiny"
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+    VERY_LARGE = "very_large"
+
+
 class ClassificationMatch(StrictClassificationModel):
     rule_id: str = Field(description="Stable rule identifier.")
     match_type: str = Field(description="Kind of rule evidence.")
@@ -82,10 +90,30 @@ class ClassificationMatch(StrictClassificationModel):
     description: str = Field(description="Concise explanation of the match.")
 
 
+class FileContext(StrictClassificationModel):
+    framework: str | None = Field(default=None, description="Observable framework or convention.")
+    component_role: str | None = Field(default=None, description="Observable component or file role.")
+    route_context: list[str] = Field(default_factory=list, description="Observable route context labels.")
+    access_context: list[str] = Field(default_factory=list, description="Observable access context labels.")
+    domains: list[str] = Field(default_factory=list, description="Bounded path-derived product domains.")
+    areas: list[str] = Field(default_factory=list, description="Human-readable contextual areas.")
+    is_user_facing: bool = Field(default=False, description="Whether path convention suggests user-facing behavior.")
+    is_dynamic_route: bool = Field(default=False, description="Whether a route segment is dynamic.")
+    is_test: bool = Field(default=False, description="Whether this is test-related.")
+    is_generated: bool = Field(default=False, description="Whether this is generated or vendored.")
+    is_configuration: bool = Field(default=False, description="Whether this is configuration-related.")
+    is_documentation: bool = Field(default=False, description="Whether this is documentation-related.")
+    is_database_change: bool = Field(default=False, description="Whether this is database-related.")
+    classification_confidence: str = Field(default="medium", description="Path-context confidence: high, medium, or low.")
+    evidence: list[ClassificationMatch] = Field(default_factory=list, description="Evidence behind the file context.")
+    warnings: list[str] = Field(default_factory=list, description="Safe context warnings.")
+
+
 class FileClassification(StrictClassificationModel):
     primary_kind: FileKind = Field(description="Resolved primary file kind.")
     areas: list[FileArea] = Field(description="Functional areas matched by the file.")
     language: FileLanguage = Field(description="Detected language or technology.")
+    context: FileContext = Field(default_factory=FileContext, description="Observable path-derived file context.")
     matches: list[ClassificationMatch] = Field(description="Evidence behind the classification.")
     warnings: list[str] = Field(description="Safe classification warnings.")
 

@@ -2,7 +2,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.file_classification import FileArea, FileKind, FileLanguage
+from app.domain.file_classification import ChangeMagnitude, FileArea, FileContext, FileKind, FileLanguage
 
 
 class StrictFilePriorityModel(BaseModel):
@@ -22,6 +22,8 @@ class FilePriorityFactor(StrictFilePriorityModel):
     points: int = Field(ge=0, description="Applied factor points after group caps.")
     description: str = Field(description="Safe factor explanation.")
     related_signal_ids: list[str] = Field(description="Related signal identifiers.")
+    related_thread_ids: list[str] = Field(default_factory=list, description="Related review-thread identifiers.")
+    evidence: list[str] = Field(default_factory=list, description="Safe observable evidence for this factor.")
     observed_value: str | None = Field(default=None, description="Safe observed value.")
 
 
@@ -35,6 +37,8 @@ class RankedFile(StrictFilePriorityModel):
     primary_kind: FileKind = Field(description="Classified primary file kind.")
     areas: list[FileArea] = Field(description="Classified file areas.")
     language: FileLanguage = Field(description="Classified language.")
+    context: FileContext = Field(default_factory=FileContext, description="Path-derived file context.")
+    change_magnitude: ChangeMagnitude = Field(default=ChangeMagnitude.TINY, description="Changed-line magnitude band.")
     changes: int = Field(ge=0, description="Changed-line count.")
     additions: int = Field(ge=0, description="Line additions.")
     deletions: int = Field(ge=0, description="Line deletions.")

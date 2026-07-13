@@ -85,13 +85,13 @@ The current UI is a detailed snapshot report. It shows:
 - observable review-state summary, concern lifecycle summary, and inline review conversations
 - summary metrics
 - merge-risk group and evidence-confidence score breakdowns
-- all ranked files with priority, kind, area, status, search, sorting, and a detail drawer
+- all ranked files with priority, kind, area, status, context labels, strongest priority reasons, search, sorting, magnitude and review-attention filters, and a detail drawer
 - all review conversations with sanitized bounded text, ordered replies, participant names, attention states, lifecycle provenance, explicit verification limits, safe GitHub links, and hidden technical IDs
 - all review signals with severity, category, affected files, collapsible evidence, collapsible limitations, and rule IDs
 - all review actions with priority, category, affected files, related signals, related readiness rules, evidence, limitations, and rule IDs
 - readiness reasons, risk contributions, confidence components, completeness, CI, classification summary, and deduplicated limitations
 
-The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. The file detail drawer shows classification evidence, previous-path classification for renames when available, priority factors, related signal IDs, and limitations; it does not show raw patches.
+The report is derived only from the `POST /api/v1/pull-requests/snapshot` response already returned by the backend. Client-side filters and sorting do not issue additional backend or GitHub requests. The file detail drawer shows classification evidence, file context, change magnitude, previous-path classification for renames when available, priority factors, related signal IDs, related review conversations, and limitations; it does not show raw patches. Technical factor IDs remain inside disclosure controls.
 
 It does not yet provide history, comparison, CODEOWNERS, repository policies, reviewer assignment, formal review-thread resolution detection, generated fixes, or GitHub publishing.
 

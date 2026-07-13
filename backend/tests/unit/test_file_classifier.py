@@ -180,6 +180,35 @@ def test_renamed_file_classifies_current_and_previous_paths_independently() -> N
     assert file.previous_classification.primary_kind == FileKind.DOCUMENTATION
 
 
+def test_nextjs_admin_dynamic_protected_route_context_and_domains() -> None:
+    classification = classify_path("app/(protected)/admin/cohort/[id]/page.tsx")
+
+    assert classification.primary_kind == FileKind.SOURCE
+    assert classification.language == FileLanguage.TYPESCRIPT
+    assert FileArea.FRONTEND in classification.areas
+    assert classification.context.framework == "nextjs_app_router"
+    assert classification.context.component_role == "route_page"
+    assert "admin" in classification.context.areas
+    assert "protected_route_group" in classification.context.access_context
+    assert "dynamic_route" in classification.context.route_context
+    assert classification.context.is_dynamic_route is True
+    assert classification.context.is_user_facing is True
+    assert classification.context.domains == ["cohort"]
+    assert "(protected)" not in classification.context.domains
+    assert "[id]" not in classification.context.domains
+
+
+def test_common_context_roles_are_path_based_and_unknown_stays_bounded() -> None:
+    assert classify_path("app/api/users/route.ts").context.component_role == "route_handler"
+    assert classify_path("app/dashboard/layout.tsx").context.component_role == "route_layout"
+    assert classify_path("frontend/src/components/UserCard.tsx").context.component_role == "frontend_component"
+    assert classify_path("backend/services/payments.py").context.component_role == "backend_service"
+    assert classify_path(".github/workflows/test.yml").context.is_configuration is True
+    assert classify_path("docs/architecture.md").context.is_documentation is True
+    assert classify_path("migrations/001_create_users.sql").context.is_database_change is True
+    assert classify_path("unknown.thing").context.classification_confidence == "low"
+
+
 def test_summary_counts_are_deterministic_and_consistent() -> None:
     files, summary = classify_changed_files(
         [

@@ -371,12 +371,18 @@ def _baseline_file_review_action(
     if not snapshot.ranked_files:
         return []
     files = [file.path for file in sorted(snapshot.ranked_files, key=lambda file: file.rank)[:5]]
+    top_file = min(snapshot.ranked_files, key=lambda file: file.rank)
+    top_reasons = [factor.description for factor in top_file.factors[:3]]
+    evidence = ["Top ranked files: " + ", ".join(files)]
+    if top_reasons:
+        evidence.append(f"Review {top_file.path} first: " + "; ".join(top_reasons) + ".")
+    evidence.append("Lower-ranked files must not be ignored.")
     return [
         _action(
             "action.review_highest_priority_files",
             [],
             [],
-            ["Top ranked files: " + ", ".join(files), "Lower-ranked files must not be ignored."],
+            evidence,
             ranked_positions,
             affected_files=files,
         )

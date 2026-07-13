@@ -147,6 +147,24 @@ Compact success response:
           "primary_kind": "source",
           "areas": ["backend"],
           "language": "python",
+          "context": {
+            "framework": null,
+            "component_role": null,
+            "route_context": [],
+            "access_context": [],
+            "domains": ["main"],
+            "areas": ["backend"],
+            "is_user_facing": false,
+            "is_dynamic_route": false,
+            "is_test": false,
+            "is_generated": false,
+            "is_configuration": false,
+            "is_documentation": false,
+            "is_database_change": false,
+            "classification_confidence": "medium",
+            "evidence": [],
+            "warnings": []
+          },
           "matches": [
             {
               "rule_id": "kind.source.extension",
@@ -367,6 +385,14 @@ Compact success response:
         "primary_kind": "source",
         "areas": ["backend"],
         "language": "python",
+        "context": {
+          "framework": null,
+          "component_role": null,
+          "domains": ["main"],
+          "areas": ["backend"],
+          "classification_confidence": "medium"
+        },
+        "change_magnitude": "tiny",
         "changes": 6,
         "additions": 5,
         "deletions": 1,
@@ -481,7 +507,7 @@ Snapshot components:
 - `merge_risk`: deterministic merge-risk assessment derived from scoring review signals.
 - `evidence_confidence`: deterministic evidence-confidence assessment derived from snapshot visibility.
 - `merge_readiness`: deterministic merge-readiness assessment derived from normalized snapshot state, review signals, merge risk, and evidence confidence.
-- `ranked_files`: every changed file once, ordered by deterministic review priority.
+- `ranked_files`: every changed file once, ordered by deterministic review priority, with path context, change magnitude, and applied priority factors.
 - `file_priority_summary`: counts and limitations for deterministic changed-file review priorities.
 - `review_actions`: deterministic prompts describing what a human reviewer should verify next.
 - `review_action_summary`: counts and limitations for deterministic review actions.

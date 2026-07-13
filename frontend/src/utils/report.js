@@ -22,7 +22,9 @@ export function filterFiles(files, filters) {
       (!filters.level || file.level === filters.level) &&
       (!filters.kind || file.primary_kind === filters.kind) &&
       (!filters.area || (file.areas ?? []).includes(filters.area)) &&
-      (!filters.status || file.status === filters.status)
+      (!filters.status || file.status === filters.status) &&
+      (!filters.magnitude || file.change_magnitude === filters.magnitude) &&
+      (!filters.reviewAttention || (file.factors ?? []).some((factor) => factor.category === "review_attention"))
     );
   });
 }

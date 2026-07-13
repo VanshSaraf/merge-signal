@@ -7,7 +7,9 @@ FILE_PRIORITY_RULES_VERSION = "v1"
 MAX_FILE_PRIORITY_SCORE = 100
 
 FACTOR_GROUP_ORDER: tuple[str, ...] = (
+    "review_attention",
     "signal_impact",
+    "file_context",
     "sensitive_area",
     "change_size",
     "visibility",
@@ -15,7 +17,9 @@ FACTOR_GROUP_ORDER: tuple[str, ...] = (
 )
 
 FACTOR_GROUP_CAPS = MappingProxyType({
+    "review_attention": 25,
     "signal_impact": 50,
+    "file_context": 25,
     "sensitive_area": 25,
     "change_size": 15,
     "visibility": 5,

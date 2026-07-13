@@ -1,10 +1,12 @@
 import { useState } from "react";
 
 import { AnalysisDashboard } from "../components/analysis/AnalysisDashboard.jsx";
-import { AnalysisForm, validatePullRequestUrl } from "../components/analysis/AnalysisForm.jsx";
-import { EmptyState } from "../components/analysis/EmptyState.jsx";
 import { ErrorPanel } from "../components/common/ErrorPanel.jsx";
 import { SkeletonDashboard } from "../components/common/Skeleton.jsx";
+import { AnalysisCommand, validatePullRequestUrl } from "../components/landing/AnalysisCommand.jsx";
+import { CapabilityOverview } from "../components/landing/CapabilityOverview.jsx";
+import { LandingHero } from "../components/landing/LandingHero.jsx";
+import { TrustSection } from "../components/landing/TrustSection.jsx";
 import { usePullRequestAnalysis } from "../hooks/usePullRequestAnalysis.js";
 
 export function HomePage() {
@@ -30,21 +32,47 @@ export function HomePage() {
 
   return (
     <div className="page-stack analysis-page">
-      <AnalysisForm
-        value={url}
-        onChange={(nextValue) => {
-          setUrl(nextValue);
-          if (validationError) {
-            setValidationError("");
-          }
-        }}
-        onSubmit={submitAnalysis}
-        onCancel={analysis.cancel}
-        isLoading={analysis.isLoading}
-        validationError={validationError}
-      />
+      {analysis.status === "success" ? (
+        <div className="report-entry-bar" aria-label="Analyze another pull request">
+          <AnalysisCommand
+            value={url}
+            onChange={(nextValue) => {
+              setUrl(nextValue);
+              if (validationError) {
+                setValidationError("");
+              }
+            }}
+            onSubmit={submitAnalysis}
+            onCancel={analysis.cancel}
+            isLoading={analysis.isLoading}
+            validationError={validationError}
+            compact
+          />
+        </div>
+      ) : (
+        <>
+          <LandingHero
+            value={url}
+            onChange={(nextValue) => {
+              setUrl(nextValue);
+              if (validationError) {
+                setValidationError("");
+              }
+            }}
+            onSubmit={submitAnalysis}
+            onCancel={analysis.cancel}
+            isLoading={analysis.isLoading}
+            validationError={validationError}
+          />
+          {analysis.status === "idle" && (
+            <>
+              <CapabilityOverview />
+              <TrustSection />
+            </>
+          )}
+        </>
+      )}
 
-      {analysis.status === "idle" && <EmptyState />}
       {analysis.status === "loading" && <SkeletonDashboard />}
       {analysis.status === "error" && <ErrorPanel error={analysis.error} onRetry={retryAnalysis} />}
       {analysis.status === "success" && <AnalysisDashboard snapshot={analysis.snapshot} />}

@@ -238,16 +238,24 @@ describe("App", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the initial empty state and backend indicator", async () => {
+  it("renders the landing experience, project links, and backend indicators", async () => {
     renderApp();
 
-    expect(screen.getByRole("heading", { name: "MergeSignal" })).toBeInTheDocument();
-    expect(screen.getByText(/Ready for a pull request/i)).toBeInTheDocument();
-    expect(screen.getByText(/does not run repository code/i)).toBeInTheDocument();
+    expect(screen.getByText("MergeSignal")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review the right changes before you merge." })).toBeInTheDocument();
+    expect(screen.getByText(/visible GitHub pull-request evidence/i)).toBeInTheDocument();
+    expect(screen.getByText("No execution of analyzed code")).toBeInTheDocument();
+    expect(screen.getByText("Evidence-backed decisions")).toBeInTheDocument();
+    expect(screen.getByText("Deterministic review guidance")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/VanshSaraf/merge-signal");
+    expect(screen.getByRole("link", { name: "Docs" })).toHaveAttribute("href", "https://github.com/VanshSaraf/merge-signal/blob/main/docs/frontend.md");
+    expect(screen.getByRole("region", { name: /Evidence to review-order pipeline/i })).toBeInTheDocument();
+    expect(screen.getByText("Public GitHub pull requests only.")).toBeInTheDocument();
+    expect(screen.getByText("Built for explainable review.")).toBeInTheDocument();
+    expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
+    expect(screen.queryByText("42/100")).not.toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByText("Backend online")).toBeInTheDocument();
-    });
+    expect(await screen.findAllByText("Backend online")).toHaveLength(2);
   });
 
   it("toggles and persists the theme", async () => {
@@ -264,14 +272,14 @@ describe("App", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
     expect(screen.getByText("Enter a public GitHub pull-request URL.")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), "https://github.com/octocat/Hello-World/issues/42");
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(screen.getByText(/Use the format/i)).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([calledUrl]) => String(calledUrl).includes("/snapshot"))).toHaveLength(0);
   });
 
   it("shows loading state and supports cancellation", async () => {
@@ -289,12 +297,14 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
-    expect(screen.getByText(/Collecting deterministic evidence/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Building analysis report/i })).toBeInTheDocument();
+    expect(screen.getByText("Validating pull request")).toBeInTheDocument();
+    expect(screen.getByText("Fetching GitHub evidence")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(await screen.findByText(/Ready for a pull request/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Review the right changes before you merge." })).toBeInTheDocument();
   });
 
   it("renders a successful analysis dashboard from the API response", async () => {
@@ -302,7 +312,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
     expect(screen.getByText("Improve merge signal collection")).toBeInTheDocument();
@@ -339,7 +349,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByText("Risk group breakdown")).toBeInTheDocument();
     expect(screen.getByText("Confidence components")).toBeInTheDocument();
@@ -358,7 +368,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
     await user.click(await screen.findByRole("tab", { name: "Files" }));
 
     expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
@@ -405,7 +415,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
     await user.click(await screen.findByRole("tab", { name: "Files" }));
     await user.type(screen.getByLabelText("Search path"), "no-match");
 
@@ -417,7 +427,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     await user.click(await screen.findByRole("tab", { name: "Signals" }));
     await user.selectOptions(screen.getByLabelText("Severity"), "medium");
@@ -439,7 +449,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     const overviewTab = await screen.findByRole("tab", { name: "Overview" });
     overviewTab.focus();
@@ -518,13 +528,13 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
     await user.click(await screen.findByRole("tab", { name: "Actions" }));
     expect(screen.getByText("Verify credential-like literal")).toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("GitHub PR URL"));
     await user.type(screen.getByLabelText("GitHub PR URL"), secondUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByText("Plain frontend cleanup")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Actions" }));
@@ -555,7 +565,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     await screen.findAllByText("Needs Manual Review");
     expect(screen.getAllByText("Needs Manual Review").length).toBeGreaterThan(0);
@@ -592,7 +602,7 @@ describe("App", () => {
     renderApp();
 
     await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByText("Invalid pull-request URL")).toBeInTheDocument();
 
@@ -607,6 +617,19 @@ describe("App", () => {
     await user.type(screen.getByLabelText("GitHub PR URL"), `${validUrl}{Enter}`);
 
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
+  });
+
+  it("renders backend-unavailable health state without blocking the command input", async () => {
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return Promise.reject(new Error("Network unavailable"));
+      }
+      return okSnapshot();
+    });
+    renderApp();
+
+    expect(await screen.findAllByText("Backend unavailable")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Analyze pull request" })).toBeEnabled();
   });
 
   it("renders a not-found route", async () => {

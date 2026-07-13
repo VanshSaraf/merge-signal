@@ -6,7 +6,12 @@ export function SkeletonDashboard() {
       <div className="skeleton-copy">
         <MergeSignalLogo size={40} decorative />
         <p className="eyebrow">Analyzing snapshot</p>
-        <h2>Collecting deterministic evidence...</h2>
+        <h2>Building analysis report...</h2>
+        <ol className="loading-steps">
+          <li>Validating pull request</li>
+          <li>Fetching GitHub evidence</li>
+          <li>Building analysis report</li>
+        </ol>
       </div>
       <div className="skeleton-grid">
         {Array.from({ length: 8 }, (_, index) => (

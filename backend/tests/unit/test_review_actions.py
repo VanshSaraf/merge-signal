@@ -108,7 +108,7 @@ def review_comment(
         body_excerpt=sanitize_review_body(body) or "",
         created_at=created_at,
         updated_at=None,
-        html_url=f"https://github.com/octocat/Hello-World/pull/42#discussion_r{id}",
+        html_url=f"https://github.com/sample-org/review-console/pull/42#discussion_r{id}",
         pull_request_review_id=900,
         in_reply_to_id=in_reply_to_id,
         path=path,
@@ -136,7 +136,7 @@ def review_record(
         state=state,
         submitted_at=submitted_at,
         body_excerpt=None,
-        html_url=f"https://github.com/octocat/Hello-World/pull/42#pullrequestreview-{id}",
+        html_url=f"https://github.com/sample-org/review-console/pull/42#pullrequestreview-{id}",
         commit_sha=commit_sha,
     )
 
@@ -192,17 +192,17 @@ def base_snapshot(
         )
     )
     return PullRequestSnapshot(
-        reference=PullRequestReference(owner="octocat", repository="Hello-World", pull_number=42, canonical_url="https://github.com/octocat/Hello-World/pull/42"),
+        reference=PullRequestReference(owner="sample-org", repository="review-console", pull_number=42, canonical_url="https://github.com/sample-org/review-console/pull/42"),
         metadata=PullRequestMetadata(
             number=42,
             title="Review action fixture",
             body="Fixture",
             state="open",
             draft=False,
-            html_url="https://github.com/octocat/Hello-World/pull/42",
-            author=PullRequestAuthor(login="octocat", avatar_url=None, html_url=None),
-            base_branch=PullRequestBranch(ref="main", sha="base", repository_full_name="octocat/Hello-World"),
-            head_branch=PullRequestBranch(ref="feature", sha="head", repository_full_name="octocat/Hello-World"),
+            html_url="https://github.com/sample-org/review-console/pull/42",
+            author=PullRequestAuthor(login="review-author", avatar_url=None, html_url=None),
+            base_branch=PullRequestBranch(ref="main", sha="base", repository_full_name="sample-org/review-console"),
+            head_branch=PullRequestBranch(ref="feature", sha="head", repository_full_name="sample-org/review-console"),
             head_sha="head",
             created_at=BASE_TIME,
             updated_at=BASE_TIME,
@@ -227,7 +227,7 @@ def base_snapshot(
             comments_complete=True,
             review_pages_fetched=0,
             comment_pages_fetched=0,
-            pr_author_login="octocat",
+            pr_author_login="review-author",
             head_sha="head",
         ),
         classification_summary=classification_summary,
@@ -359,7 +359,7 @@ def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
                 conclusion="success",
                 provider_name="GitHub Actions",
                 provider_slug="github-actions",
-                details_url="https://github.com/octocat/Hello-World/actions/runs/1/job/2",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/2",
                 started_at=BASE_TIME,
                 completed_at=BASE_TIME,
             )
@@ -370,7 +370,7 @@ def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
                 context="Vercel",
                 state="failure",
                 description="Authorization required to deploy.",
-                target_url="https://vercel.com/git/authorize?repo=octocat",
+                target_url="https://vercel.com/git/authorize?repo=sample-org-review-console",
                 creator_login="vercel[bot]",
                 created_at=BASE_TIME,
                 updated_at=BASE_TIME,
@@ -386,7 +386,7 @@ def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
     evidence = " ".join(actions["action.inspect_failing_ci"].evidence)
     assert "Vercel" in evidence
     assert "Authorization required to deploy." in evidence
-    assert "https://vercel.com/git/authorize?repo=octocat" in evidence
+    assert "https://vercel.com/git/authorize?repo=sample-org-review-console" in evidence
     assert "Passed CI item: GitHub Actions / Static checks & unit tests." in actions["action.inspect_failing_ci"].evidence
 
 
@@ -539,13 +539,13 @@ def test_review_concern_lifecycle_actions_are_deduplicated_traceable_and_non_sco
         [review_record(900, "reviewer", ReviewState.CHANGES_REQUESTED)],
         [
             review_comment(901, "reviewer", "Please fix this.", path="backend/app/main.py"),
-            review_comment(902, "octocat", "Fixed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
+            review_comment(902, "review-author", "Fixed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
         ],
         reviews_complete=True,
         comments_complete=True,
         review_pages_fetched=1,
         comment_pages_fetched=1,
-        pr_author_login="octocat",
+        pr_author_login="review-author",
         head_sha="head",
     )
     snapshot = analyzed_snapshot([changed_file("backend/app/main.py")], review_context=review_context)
@@ -558,7 +558,7 @@ def test_review_concern_lifecycle_actions_are_deduplicated_traceable_and_non_sco
     assert len(review_actions) == 1
     assert review_actions[0].rule_id == "action.review_concern.active_change_request"
     assert review_actions[0].affected_files == ["backend/app/main.py"]
-    assert any("Details URL: https://github.com/octocat/Hello-World/pull/42#discussion_r901" in item for item in review_actions[0].evidence)
+    assert any("Details URL: https://github.com/sample-org/review-console/pull/42#discussion_r901" in item for item in review_actions[0].evidence)
     assert any("cannot verify" in item for item in review_actions[0].evidence)
     assert snapshot.merge_risk.score == before_risk
     assert snapshot.merge_readiness.decision == before_readiness
@@ -569,13 +569,13 @@ def test_author_claimed_addressed_action_is_emitted_without_active_change_reques
         [review_record(900, "reviewer", ReviewState.COMMENTED)],
         [
             review_comment(901, "reviewer", "Please revise this.", path="backend/app/main.py"),
-            review_comment(902, "octocat", "Addressed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
+            review_comment(902, "review-author", "Addressed.", created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
         ],
         reviews_complete=True,
         comments_complete=True,
         review_pages_fetched=1,
         comment_pages_fetched=1,
-        pr_author_login="octocat",
+        pr_author_login="review-author",
         head_sha="head",
     )
     snapshot = analyzed_snapshot([changed_file("backend/app/main.py")], review_context=review_context)
@@ -584,9 +584,113 @@ def test_author_claimed_addressed_action_is_emitted_without_active_change_reques
 
     assert "action.review_concern.verify_author_claim" in actions
     action = actions["action.review_concern.verify_author_claim"]
-    assert action.id == "action.review_concern.verify_author_claim.901"
+    assert action.id.startswith("action.review_concern.verify_author_claim.backend/app/main.py.review-thread-901")
     assert action.priority == ReviewActionPriority.MEDIUM
+    assert "Conversation: review-thread-901." in action.evidence
     assert any("cannot verify" in item for item in action.evidence)
+
+
+def test_equivalent_author_response_actions_on_same_file_merge_with_thread_provenance() -> None:
+    path = "src/features/settings/handler.py"
+    review_context = build_review_context(
+        [review_record(1000, "reviewer-one", ReviewState.COMMENTED)],
+        [
+            review_comment(1001, "reviewer-one", "Please preserve the selected settings tab.", path=path),
+            review_comment(1002, "review-author", "Updated the handler to keep the selected settings tab.", path=path, created_at=BASE_TIME.replace(minute=1), in_reply_to_id=1001),
+            review_comment(1003, "reviewer-one", "Please keep the notification filter active.", path=path, created_at=BASE_TIME.replace(minute=2)),
+            review_comment(1004, "review-author", "Updated the handler to keep the notification filter active.", path=path, created_at=BASE_TIME.replace(minute=3), in_reply_to_id=1003),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="review-author",
+        head_sha="head",
+    )
+    snapshot = analyzed_snapshot([changed_file(path)], review_context=review_context)
+    before_risk = snapshot.merge_risk.model_dump()
+    before_readiness = snapshot.merge_readiness.model_dump()
+    before_confidence = snapshot.evidence_confidence.model_dump()
+    before_lifecycle = [thread.lifecycle.model_dump() for thread in snapshot.review_context.threads]
+
+    actions, _summary = build_review_actions(snapshot)
+    review_actions = [action for action in actions if action.rule_id == "action.review_concern.verify_author_response"]
+
+    assert len(review_actions) == 1
+    action = review_actions[0]
+    assert action.title == "Verify the author response"
+    assert action.description == "The author responded in 2 review conversations on this file; reviewer verification is still needed."
+    assert action.affected_files == [path]
+    assert any("Conversation: review-thread-1001." == item for item in action.evidence)
+    assert any("Conversation: review-thread-1003." == item for item in action.evidence)
+    assert any("Details URL: https://github.com/sample-org/review-console/pull/42#discussion_r1001" == item for item in action.evidence)
+    assert any("Details URL: https://github.com/sample-org/review-console/pull/42#discussion_r1003" == item for item in action.evidence)
+    assert snapshot.merge_risk.model_dump() == before_risk
+    assert snapshot.merge_readiness.model_dump() == before_readiness
+    assert snapshot.evidence_confidence.model_dump() == before_confidence
+    assert [thread.lifecycle.model_dump() for thread in snapshot.review_context.threads] == before_lifecycle
+
+
+def test_author_response_actions_on_different_files_remain_separate_and_ordered() -> None:
+    first_path = "src/features/settings/handler.py"
+    second_path = "src/features/profile/handler.py"
+    review_context = build_review_context(
+        [review_record(1100, "reviewer-one", ReviewState.COMMENTED)],
+        [
+            review_comment(1101, "reviewer-one", "Please preserve settings state.", path=first_path),
+            review_comment(1102, "review-author", "Updated the settings handler to preserve state.", path=first_path, created_at=BASE_TIME.replace(minute=1), in_reply_to_id=1101),
+            review_comment(1103, "reviewer-one", "Please preserve profile state.", path=second_path, created_at=BASE_TIME.replace(minute=2)),
+            review_comment(1104, "review-author", "Updated the profile handler to preserve state.", path=second_path, created_at=BASE_TIME.replace(minute=3), in_reply_to_id=1103),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="review-author",
+        head_sha="head",
+    )
+    snapshot = analyzed_snapshot([changed_file(second_path), changed_file(first_path)], review_context=review_context)
+
+    actions, _summary = build_review_actions(snapshot)
+    review_actions = [action for action in actions if action.rule_id == "action.review_concern.verify_author_response"]
+
+    assert len(review_actions) == 2
+    assert [action.affected_files for action in review_actions] == [[second_path], [first_path]]
+    assert [action.description for action in review_actions] == [
+        "Review the author's described changes; MergeSignal has not verified the code change.",
+        "Review the author's described changes; MergeSignal has not verified the code change.",
+    ]
+
+
+def test_different_review_lifecycle_tasks_remain_separate() -> None:
+    path = "src/features/settings/handler.py"
+    review_context = build_review_context(
+        [review_record(1200, "reviewer-one", ReviewState.COMMENTED)],
+        [
+            review_comment(1201, "reviewer-one", "Please preserve settings state.", path=path),
+            review_comment(1202, "review-author", "Updated the handler to preserve settings state.", path=path, created_at=BASE_TIME.replace(minute=1), in_reply_to_id=1201),
+            review_comment(1203, "reviewer-one", "Please explain the fallback behavior.", path=path, created_at=BASE_TIME.replace(minute=2)),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="review-author",
+        head_sha="head",
+    )
+    snapshot = analyzed_snapshot([changed_file(path)], review_context=review_context)
+
+    actions, _summary = build_review_actions(snapshot)
+    review_actions = [action for action in actions if action.category == ReviewActionCategory.REVIEW]
+
+    assert [action.rule_id for action in review_actions] == [
+        "action.review_concern.awaiting_author_response",
+        "action.review_concern.verify_author_response",
+    ]
+    assert [action.title for action in review_actions] == [
+        "Respond to reviewer concern",
+        "Verify the author response",
+    ]
 
 
 def test_security_actions_are_distinct_and_sanitized() -> None:

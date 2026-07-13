@@ -35,7 +35,11 @@ The baseline file-review action includes at most the top five ranked file paths.
 
 ## Aggregation And Suppression
 
-MergeSignal emits at most one action per rule for most rule families. Review-concern lifecycle actions are keyed by conversation so separate inline conversations remain individually traceable. It aggregates affected files, related signal IDs, related readiness rule IDs, and safe evidence.
+MergeSignal emits at most one action per rule for most rule families. Review-concern lifecycle actions use structured grouping so equivalent author-response verification work on the same file merges into one action while preserving every related review-thread identifier and evidence item. The grouping key uses the canonical repository path, action category, lifecycle attention state, verification-needed status, and normalized reviewer task. Different files and genuinely different tasks, such as awaiting author response, reviewer follow-up, active change request, author claim verification, and author-described-change verification, remain separate.
+
+When multiple same-file author-response conversations merge, the action keeps one title, `Verify the author response`, and describes the number of related conversations in safe generic wording. Thread IDs remain in action evidence and downstream provenance, but technical IDs stay hidden in the frontend until details are expanded.
+
+MergeSignal aggregates affected files, related signal IDs, related readiness rule IDs, and safe evidence.
 
 Suppression keeps output concise:
 

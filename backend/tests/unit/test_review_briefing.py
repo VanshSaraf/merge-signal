@@ -96,6 +96,22 @@ def production_without_tests_signal(path: str) -> ReviewSignal:
     )
 
 
+def custom_high_signal(path: str, title: str = "Unusual deployment evidence observed") -> ReviewSignal:
+    return ReviewSignal(
+        id="custom.high.signal:fixture",
+        rule_id="custom.high.signal",
+        title=title,
+        description="A generic high-severity fixture signal was observed.",
+        category=SignalCategory.INFRASTRUCTURE,
+        severity=SignalSeverity.HIGH,
+        scope=SignalScope.FILE,
+        affected_files=[path],
+        evidence=[SignalEvidence(kind=EvidenceKind.METADATA, message="Fixture evidence.")],
+        limitations=[],
+        tags=["fixture"],
+    )
+
+
 def merge_conflict_signal(*, title: str = "GitHub reports a merge conflict condition") -> ReviewSignal:
     return ReviewSignal(
         id="metadata.merge_conflict_observed:fixture",
@@ -331,6 +347,20 @@ def test_merge_conflict_briefing_and_readiness_preserve_github_casing_without_re
     assert result.evidence_confidence.score == 100
     assert "gitHub" not in briefing.headline
     assert "Github" not in briefing.headline
+    assert "GitHub reports a merge conflict condition" in [item.title for item in briefing.review_focus]
+    assert "Resolve the reported merge conflict" in [step.title for step in briefing.recommended_steps]
+    assert "[ ] Resolve the reported merge conflict" in briefing.checklist
+    assert "[ ] GitHub reports a merge conflict condition" not in briefing.checklist
+
+
+def test_briefing_recommended_steps_use_imperative_fallback_for_unknown_signal_titles() -> None:
+    path = "src/features/settings/handler.py"
+    result = snapshot([changed_file(path)], signals=[custom_high_signal(path)])
+    briefing = result.review_briefing
+
+    assert [item.title for item in briefing.review_focus] == ["Unusual deployment evidence observed"]
+    assert briefing.recommended_steps[0].title == "Review unusual deployment evidence observed"
+    assert briefing.checklist[0] == "[ ] Review unusual deployment evidence observed"
 
 
 def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:

@@ -80,7 +80,7 @@ function ReviewThreadRow({ thread, expanded, onToggle }) {
   const lifecycle = thread.lifecycle ?? {};
   const location = [thread.path, lineLabel(thread)].filter(Boolean).join(":");
   const githubUrl = safeHttpUrl(thread.html_url);
-  const excerpt = plainReviewText(root.body_excerpt) || "No comment text available.";
+  const excerpt = reviewDisplayText(root.body_excerpt) || "No comment text available.";
 
   return (
     <article className="report-item review-thread-row">
@@ -133,10 +133,18 @@ function CommentBlock({ comment, label }) {
   return (
     <div className="review-comment">
       <strong>{label} · {comment.reviewer_login ?? "Unknown"}</strong>
-      <p>{plainReviewText(comment.body_excerpt) || "No comment text available."}</p>
+      <p>{reviewDisplayText(comment.body_excerpt) || "No comment text available."}</p>
       <small>{formatTimestamp(comment.created_at)}</small>
     </div>
   );
+}
+
+function reviewDisplayText(value) {
+  return plainReviewText(value)
+    .replace(/^Summary:\s*(?:\n\s*)+/gim, "Summary: ")
+    .replace(/^Summary:\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function DisclosureList({ title, items }) {

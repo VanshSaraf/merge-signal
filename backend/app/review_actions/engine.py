@@ -181,20 +181,27 @@ def _review_concern_actions(
     snapshot: PullRequestSnapshot,
     ranked_positions: dict[str, int],
 ) -> list[ReviewAction]:
-    actions: list[ReviewAction] = []
+    grouped_threads: dict[str, list[ReviewThreadRecord]] = {}
     for thread in snapshot.review_context.threads:
         rule_id = _review_concern_rule_id(thread)
         if rule_id is None:
             continue
+        grouped_threads.setdefault(_review_concern_action_key(rule_id, thread), []).append(thread)
+
+    actions: list[ReviewAction] = []
+    for threads in grouped_threads.values():
+        thread = threads[0]
+        rule_id = _review_concern_rule_id(thread)
+        if rule_id is None:
+            continue
         evidence = [
-            thread.lifecycle.summary,
+            *unique_sorted([thread.lifecycle.summary for thread in threads if thread.lifecycle.summary]),
             "MergeSignal cannot verify that the code change resolves this concern.",
-            f"Conversation: {thread.id}.",
+            *[f"Conversation: {item.id}." for item in threads],
         ]
-        if thread.html_url:
-            evidence.append(f"Details URL: {thread.html_url}")
-        if thread.root_comment.reviewer_login:
-            evidence.append(f"Root commenter: {thread.root_comment.reviewer_login}.")
+        evidence.extend(f"Details URL: {item.html_url}" for item in threads if item.html_url)
+        evidence.extend(f"Root commenter: {item.root_comment.reviewer_login}." for item in threads if item.root_comment.reviewer_login)
+        description = _review_concern_action_description(rule_id, threads)
         actions.append(
             _action(
                 rule_id,
@@ -202,8 +209,9 @@ def _review_concern_actions(
                 [],
                 evidence,
                 ranked_positions,
-                affected_files=[thread.path] if thread.path else [],
-                action_id=f"{rule_id}.{thread.root_comment_id}",
+                affected_files=[item.path for item in threads if item.path],
+                action_id=_review_concern_action_id(rule_id, threads),
+                description=description,
             )
         )
     return actions
@@ -221,6 +229,47 @@ def _review_concern_rule_id(thread: ReviewThreadRecord) -> str | None:
     if thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES:
         return "action.review_concern.verify_author_response"
     return None
+
+
+def _review_concern_action_key(rule_id: str, thread: ReviewThreadRecord) -> str:
+    path = _canonical_path(thread.path)
+    task = _normalized_reviewer_task(rule_id)
+    lifecycle = thread.lifecycle
+    return "|".join(
+        [
+            path,
+            "review",
+            lifecycle.attention_state.value,
+            str(lifecycle.verification_needed).lower(),
+            task,
+        ]
+    )
+
+
+def _review_concern_action_id(rule_id: str, threads: list[ReviewThreadRecord]) -> str:
+    thread_ids = ",".join(sorted(thread.id for thread in threads))
+    path = _canonical_path(threads[0].path)
+    return f"{rule_id}.{path}.{thread_ids}"
+
+
+def _review_concern_action_description(rule_id: str, threads: list[ReviewThreadRecord]) -> str | None:
+    if rule_id != "action.review_concern.verify_author_response" or len(threads) == 1:
+        return None
+    return f"The author responded in {len(threads)} review conversations on this file; reviewer verification is still needed."
+
+
+def _canonical_path(path: str | None) -> str:
+    return (path or "pull-request").strip().casefold()
+
+
+def _normalized_reviewer_task(rule_id: str) -> str:
+    return {
+        "action.review_concern.awaiting_author_response": "respond_to_reviewer_concern",
+        "action.review_concern.verify_author_claim": "verify_author_claim",
+        "action.review_concern.verify_author_response": "verify_author_response",
+        "action.review_concern.reviewer_follow_up": "review_follow_up",
+        "action.review_concern.active_change_request": "address_active_change_request",
+    }.get(rule_id, rule_id)
 
 
 def _ci_failure_action_evidence(snapshot: PullRequestSnapshot, blocking_items=None) -> list[str]:

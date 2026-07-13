@@ -800,16 +800,16 @@ function auditedReviewerFlowSnapshot() {
         limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
       {
-        id: "action.review_concern.verify_author_response.8101",
+        id: "action.review_concern.verify_author_response.app/(secure)/admin/projects/[projectId]/page.tsx.review-thread-8101,review-thread-8103",
         rule_id: "action.review_concern.verify_author_response",
         title: "Verify the author response",
-        description: "Author described changes; reviewer verification is still needed.",
+        description: "The author responded in 2 review conversations on this file; reviewer verification is still needed.",
         priority: "medium",
         category: "review",
         affected_files: [path],
         related_signal_ids: [],
         related_readiness_rule_ids: [],
-        evidence: ["Author described changes; reviewer verification is still needed."],
+        evidence: ["Author described changes; reviewer verification is still needed.", "Conversation: review-thread-8101.", "Conversation: review-thread-8103."],
         limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
       },
       {
@@ -901,7 +901,7 @@ function auditedReviewerFlowSnapshot() {
         readiness_reason_ids: ["readiness.blocked.ci_failing"],
         ci_item_ids: ["ci:commit_status:vercel:vercel:https://vercel.com/git/authorize"],
         signal_ids: ["testing.production_change_without_test_files"],
-        action_ids: ["action.review_concern.verify_author_response.8101", "action.review_test_coverage.production_without_tests"],
+        action_ids: ["action.review_concern.verify_author_response.app/(secure)/admin/projects/[projectId]/page.tsx.review-thread-8101,review-thread-8103", "action.review_test_coverage.production_without_tests"],
         file_paths: [path],
         review_thread_ids: ["review-thread-8101", "review-thread-8103"],
       },
@@ -1255,6 +1255,7 @@ describe("App", () => {
 
   it("renders audited reviewer-flow output without duplicate blockers or lost file signals", async () => {
     const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const snapshot = auditedReviewerFlowSnapshot();
     global.fetch = vi.fn((url) => {
       if (String(url).endsWith("/health")) {
@@ -1304,6 +1305,11 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "Actions" }));
     expect(screen.getByRole("heading", { name: "Inspect failed Vercel authorization/configuration check" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Inspect failing CI" })).not.toBeInTheDocument();
+    const actionsPanel = screen.getByRole("tabpanel", { name: "Actions" });
+    expect(within(actionsPanel).getAllByRole("heading", { name: "Verify the author response" })).toHaveLength(1);
+    expect(actionsPanel).toHaveTextContent("The author responded in 2 review conversations on this file; reviewer verification is still needed.");
+    expect(actionsPanel).not.toHaveTextContent("undefined");
+    expect(actionsPanel).not.toHaveTextContent("null");
 
     await user.click(screen.getByRole("tab", { name: "Reviews (2)" }));
     expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Author response needs verification");
@@ -1330,6 +1336,91 @@ describe("App", () => {
     expect(screen.getByText("Related signal IDs")).toBeInTheDocument();
     expect(screen.getByText("testing.production_change_without_test_files")).toBeInTheDocument();
     expect(screen.queryByText("ci:commit_status:vercel:vercel:https://vercel.com/git/authorize")).not.toBeInTheDocument();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it("renders imperative recommended steps and unique checklist entries", async () => {
+    const user = userEvent.setup();
+    const snapshot = snapshotResponse({
+      merge_readiness: {
+        ...snapshotResponse().merge_readiness,
+        decision: "blocked",
+        decisive_rule_id: "readiness.blocked.merge_conflict",
+        reasons: [
+          {
+            rule_id: "readiness.blocked.merge_conflict",
+            title: "GitHub reports a merge conflict condition",
+            description: "GitHub reported mergeability evidence.",
+            effect: "block",
+            observed_value: "merge_conflict_observed",
+            related_signal_ids: ["metadata.merge_conflict_observed:fixture"],
+            affected_files: [],
+            explanation: "GitHub mergeability data reports a merge conflict condition.",
+            limitations: [],
+          },
+        ],
+      },
+      review_briefing: {
+        ...snapshotResponse().review_briefing,
+        status: "blocked",
+        headline: "Blocked because GitHub reports a merge conflict condition.",
+        review_focus: [
+          {
+            title: "GitHub reports a merge conflict condition",
+            description: "GitHub reports mergeability data consistent with a conflict condition.",
+            severity: "high",
+            source_type: "review_signal",
+            affected_files: [],
+            url: null,
+            provenance: ["metadata.merge_conflict_observed:fixture"],
+          },
+        ],
+        recommended_steps: [
+          {
+            order: 1,
+            title: "Resolve the reported merge conflict",
+            description: "Verify the merge-conflict condition before merge readiness can be restored.",
+            category: "mergeability",
+            affected_files: [],
+            url: null,
+            source_ids: ["action.resolve_merge_conflict", "metadata.merge_conflict_observed:fixture"],
+          },
+          {
+            order: 2,
+            title: "Review backend/app/main.py",
+            description: "Source change prioritized because changed-line count is small.",
+            category: "file_priority",
+            affected_files: ["backend/app/main.py"],
+            url: null,
+            source_ids: ["backend/app/main.py"],
+          },
+        ],
+        checklist: [
+          "[ ] Resolve the reported merge conflict",
+          "[ ] Review backend/app/main.py",
+        ],
+      },
+    });
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshot);
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    const briefing = await screen.findByLabelText("Review briefing");
+    expect(briefing).toHaveTextContent("Blocked because GitHub reports a merge conflict condition.");
+    expect(briefing).toHaveTextContent("GitHub reports a merge conflict condition");
+    expect(briefing).toHaveTextContent("Resolve the reported merge conflict");
+    expect(briefing).not.toHaveTextContent("[ ] GitHub reports a merge conflict condition");
+    const checklistItems = snapshot.review_briefing.checklist;
+    expect(new Set(checklistItems).size).toBe(checklistItems.length);
+    expect(document.body).not.toHaveTextContent("undefined");
+    expect(document.body).not.toHaveTextContent("null");
   });
 
   it("renders review context summary, conversations, safe links, and hidden technical details", async () => {
@@ -1493,13 +1584,13 @@ describe("App", () => {
   it("renders author-response verification wording and readable review text", async () => {
     const user = userEvent.setup();
     const thread = threadFixture(741, "author_described_changes", {
-      body_excerpt: "### Summary\nPlease preserve `?status=` when switching tabs.",
+      body_excerpt: "Summary:\n\nPlease preserve `?status=` when switching tabs.",
       summary: "Author described changes; reviewer verification is still needed.",
       replies: [
         {
           id: 742,
           reviewer_login: "octocat",
-          body_excerpt: "Both links now include `status=${activeStatus.key}`.",
+          body_excerpt: "Summary:",
           created_at: "2026-07-13T10:42:00Z",
           updated_at: null,
           html_url: "https://github.com/octocat/Hello-World/pull/42#discussion_r742",
@@ -1575,9 +1666,11 @@ describe("App", () => {
     expect((await screen.findAllByText("Verify the author response")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Reviews (1)" }));
     expect(screen.getAllByText("Author response needs verification").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Please preserve \?status= when switching tabs/i)).toBeInTheDocument();
+    expect(screen.getByText(/Summary: Please preserve \?status= when switching tabs/i)).toBeInTheDocument();
+    expect(screen.queryByText("Summary:")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View conversation" }));
-    expect(screen.getByText("Both links now include status=${activeStatus.key}.")).toBeInTheDocument();
+    expect(screen.getByText("No comment text available.")).toBeInTheDocument();
+    expect(screen.queryByText("Summary:")).not.toBeInTheDocument();
     expect(screen.queryByText(/verified fix/i)).not.toBeInTheDocument();
   });
 

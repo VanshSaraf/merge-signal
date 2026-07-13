@@ -51,6 +51,8 @@ The implementation deduplicates related evidence so a failing CI readiness reaso
 
 CI focus items, recommended steps, checklist entries, and Review Actions all use the same actionable CI wording generated from structured provider/category/state evidence. Generic wording such as `Inspect failed CI check` is reserved for snapshots where structured provider detail is unavailable.
 
+Recommended-step and checklist titles are imperative even when their source focus item is evidence-oriented. For example, a merge-conflict focus item may keep the descriptive title `GitHub reports a merge conflict condition`, while the recommended step becomes `Resolve the reported merge conflict`. Deterministic mappings cover known readiness and signal categories such as merge conflicts, CI visibility, migration safety, and review-response verification. Unknown titles use a concise `Review ...` fallback instead of copying descriptive evidence text directly.
+
 When a specific top-file step is available, the briefing suppresses the generic `Review highest-priority files` step for the same path. The explicit file step uses the canonical ranked-file path and may include compact context such as protected admin route, large change, review conversations, and missing paired test-file changes. The same exact path is recommended once in the checklist. This keeps the checklist focused without hiding the underlying ranked file or review-action data.
 
 ## Headlines
@@ -67,6 +69,8 @@ Checklist output is stable plain text with up to five non-overlapping reviewer a
 ```
 
 Checklist lines suppress generic CI wording when a more specific CI blocker exists, and suppress generic file-review wording when a specific top-file step is already present. They avoid raw patches, comment technical IDs, credentials, and unsupported claims.
+
+Checklist entries use the same imperative titles as recommended steps and are deduplicated by canonical action category, affected paths, and provenance.
 
 ## Safe Links
 

@@ -601,7 +601,34 @@ def _safe_url(value: str | None) -> str | None:
 
 
 def _imperative_title(title: str) -> str:
-    return title.rstrip(".")
+    clean = title.strip().rstrip(".")
+    if not clean:
+        return "Review available evidence"
+    normalized = clean.casefold()
+    mappings = {
+        "github reports a merge conflict condition": "Resolve the reported merge conflict",
+        "resolve merge conflict": "Resolve the reported merge conflict",
+        "database migration files changed": "Inspect migration safety",
+        "sensitive-area change without changed test files": "Review sensitive change test evidence",
+        "no test files were changed in this pull request": "Review production change test evidence",
+        "no ci results were observed for the current head sha": "Verify CI visibility",
+        "investigate ci visibility": "Verify CI visibility",
+    }
+    if normalized in mappings:
+        return mappings[normalized]
+    if clean.split(" ", 1)[0].casefold() in {
+        "address",
+        "check",
+        "inspect",
+        "investigate",
+        "respond",
+        "resolve",
+        "review",
+        "verify",
+        "wait",
+    }:
+        return clean
+    return f"Review {clean[:1].lower() + clean[1:]}"
 
 
 def _canonical_ci_item_id(item) -> str:

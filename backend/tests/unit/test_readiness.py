@@ -254,6 +254,9 @@ def test_blocking_rules_and_decisive_priority() -> None:
     assert assessment.decisive_rule_id == "readiness.blocked.merge_conflict"
     assert rule_ids(assessment)[:2] == ["readiness.blocked.merge_conflict", "readiness.blocked.ci_failing"]
     assert assessment.blocking_reason_count == 2
+    merge_conflict_reason = assessment.reasons[0]
+    assert merge_conflict_reason.title == "GitHub reports a merge conflict condition"
+    assert merge_conflict_reason.explanation == "GitHub mergeability data reports a merge conflict condition."
 
 
 @pytest.mark.parametrize(

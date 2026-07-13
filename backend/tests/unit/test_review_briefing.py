@@ -40,7 +40,7 @@ def changed_file(filename: str, *, additions: int = 1, deletions: int = 1, patch
 
 
 def review_record(reviewer_login: str, state: ReviewState) -> PullRequestReviewRecord:
-    return PullRequestReviewRecord(id=900, reviewer_login=reviewer_login, state=state, submitted_at=BASE_TIME, body_excerpt=None, html_url="https://github.com/octocat/Hello-World/pull/42#pullrequestreview-900", commit_sha="head")
+    return PullRequestReviewRecord(id=900, reviewer_login=reviewer_login, state=state, submitted_at=BASE_TIME, body_excerpt=None, html_url="https://github.com/sample-org/review-console/pull/42#pullrequestreview-900", commit_sha="head")
 
 
 def review_comment(id: int, reviewer_login: str, body: str, *, path: str, in_reply_to_id: int | None = None, created_at: datetime = BASE_TIME, current_position: int | None = 3) -> ReviewCommentRecord:
@@ -50,7 +50,7 @@ def review_comment(id: int, reviewer_login: str, body: str, *, path: str, in_rep
         body_excerpt=sanitize_review_body(body) or "",
         created_at=created_at,
         updated_at=None,
-        html_url=f"https://github.com/octocat/Hello-World/pull/42#discussion_r{id}",
+        html_url=f"https://github.com/sample-org/review-console/pull/42#discussion_r{id}",
         pull_request_review_id=900,
         in_reply_to_id=in_reply_to_id,
         path=path,
@@ -96,21 +96,37 @@ def production_without_tests_signal(path: str) -> ReviewSignal:
     )
 
 
+def merge_conflict_signal(*, title: str = "GitHub reports a merge conflict condition") -> ReviewSignal:
+    return ReviewSignal(
+        id="metadata.merge_conflict_observed:fixture",
+        rule_id="metadata.merge_conflict_observed",
+        title=title,
+        description="GitHub reports mergeability data consistent with a conflict condition.",
+        category=SignalCategory.METADATA,
+        severity=SignalSeverity.HIGH,
+        scope=SignalScope.PULL_REQUEST,
+        affected_files=[],
+        evidence=[SignalEvidence(kind=EvidenceKind.METADATA, message="GitHub mergeability indicates a conflict condition.")],
+        limitations=["GitHub mergeability may be temporarily unavailable or recomputed."],
+        tags=["metadata", "mergeability"],
+    )
+
+
 def snapshot(files: list[ChangedFile], *, ci: PullRequestCi | None = None, review_context=None, signals: list[ReviewSignal] | None = None, files_complete: bool = True) -> PullRequestSnapshot:
     classified_files, classification_summary = classify_changed_files(files)
     ci = ci or passing_ci()
     base = PullRequestSnapshot(
-        reference=PullRequestReference(owner="octocat", repository="Hello-World", pull_number=42, canonical_url="https://github.com/octocat/Hello-World/pull/42"),
+        reference=PullRequestReference(owner="sample-org", repository="review-console", pull_number=42, canonical_url="https://github.com/sample-org/review-console/pull/42"),
         metadata=PullRequestMetadata(
             number=42,
             title="Briefing fixture",
             body="Fixture",
             state="open",
             draft=False,
-            html_url="https://github.com/octocat/Hello-World/pull/42",
-            author=PullRequestAuthor(login="octocat", avatar_url=None, html_url=None),
-            base_branch=PullRequestBranch(ref="main", sha="base", repository_full_name="octocat/Hello-World"),
-            head_branch=PullRequestBranch(ref="feature", sha="head", repository_full_name="octocat/Hello-World"),
+            html_url="https://github.com/sample-org/review-console/pull/42",
+            author=PullRequestAuthor(login="review-author", avatar_url=None, html_url=None),
+            base_branch=PullRequestBranch(ref="main", sha="base", repository_full_name="sample-org/review-console"),
+            head_branch=PullRequestBranch(ref="feature", sha="head", repository_full_name="sample-org/review-console"),
             head_sha="head",
             created_at=BASE_TIME,
             updated_at=BASE_TIME,
@@ -128,7 +144,7 @@ def snapshot(files: list[ChangedFile], *, ci: PullRequestCi | None = None, revie
         commits=[PullRequestCommit(sha="head", message="Fixture", html_url=None, author_login=None, author_name=None, authored_at=BASE_TIME, committed_at=BASE_TIME)],
         ci=ci,
         ci_explanation=build_ci_explanation(ci),
-        review_context=review_context if review_context is not None else build_review_context([], [], reviews_complete=True, comments_complete=True, review_pages_fetched=0, comment_pages_fetched=0, pr_author_login="octocat", head_sha="head"),
+        review_context=review_context if review_context is not None else build_review_context([], [], reviews_complete=True, comments_complete=True, review_pages_fetched=0, comment_pages_fetched=0, pr_author_login="review-author", head_sha="head"),
         classification_summary=classification_summary,
         signals=signals or [],
         completeness=SnapshotCompleteness(files_complete=files_complete, commits_complete=True, missing_patch_count=sum(1 for file in classified_files if file.patch is None), warnings=[] if files_complete else ["Changed-file collection was incomplete."]),
@@ -175,7 +191,7 @@ def failing_vercel_ci() -> PullRequestCi:
                 context="Vercel",
                 state="failure",
                 description="Authorization required to deploy.",
-                target_url="https://vercel.com/git/authorize?repo=octocat",
+                target_url="https://vercel.com/git/authorize?repo=sample-org-review-console",
                 creator_login="vercel[bot]",
                 created_at=BASE_TIME,
                 updated_at=BASE_TIME,
@@ -199,7 +215,7 @@ def two_failing_ci_surfaces() -> PullRequestCi:
                 conclusion="failure",
                 provider_name="GitHub Actions",
                 provider_slug="github-actions",
-                details_url="https://github.com/octocat/Hello-World/actions/runs/1/job/7",
+                details_url="https://github.com/sample-org/review-console/actions/runs/1/job/7",
                 started_at=BASE_TIME,
                 completed_at=BASE_TIME,
             )
@@ -210,7 +226,7 @@ def two_failing_ci_surfaces() -> PullRequestCi:
                 context="Vercel",
                 state="failure",
                 description="Authorization required to deploy.",
-                target_url="https://vercel.com/git/authorize?repo=octocat",
+                target_url="https://vercel.com/git/authorize?repo=sample-org-review-console",
                 creator_login="vercel[bot]",
                 created_at=BASE_TIME,
                 updated_at=BASE_TIME,
@@ -266,7 +282,7 @@ def test_briefing_identifies_specific_blocking_ci_surface_and_safe_link() -> Non
     assert briefing.status == "blocked"
     assert briefing.headline == "Blocked by failed Vercel authorization/configuration check."
     assert briefing.primary_reason is not None
-    assert briefing.primary_reason.url == "https://vercel.com/git/authorize?repo=octocat"
+    assert briefing.primary_reason.url == "https://vercel.com/git/authorize?repo=sample-org-review-console"
     assert briefing.review_focus[0].title == "Inspect failed Vercel authorization/configuration check"
     assert any(id.startswith("ci:commit_status:vercel:authorization_or_configuration:vercel:") for id in briefing.provenance.ci_item_ids)
     assert result.merge_readiness.decision.value == "blocked"
@@ -299,20 +315,38 @@ def test_equivalent_ci_blockers_collapse_and_preserve_provenance() -> None:
     assert result.evidence_confidence.score == 100
 
 
+def test_merge_conflict_briefing_and_readiness_preserve_github_casing_without_rewriting_data() -> None:
+    result = snapshot([changed_file("backend/app/main.py")], signals=[merge_conflict_signal()])
+    briefing = result.review_briefing
+    reason = result.merge_readiness.reasons[0]
+
+    assert briefing.headline == "Blocked because GitHub reports a merge conflict condition."
+    assert reason.title == "GitHub reports a merge conflict condition"
+    assert reason.explanation == "GitHub mergeability data reports a merge conflict condition."
+    assert reason.related_signal_ids == ["metadata.merge_conflict_observed:fixture"]
+    assert result.reference.repository == "review-console"
+    assert result.reference.canonical_url == "https://github.com/sample-org/review-console/pull/42"
+    assert result.merge_readiness.decision.value == "blocked"
+    assert result.merge_risk.score == calculate_merge_risk(result.signals).score
+    assert result.evidence_confidence.score == 100
+    assert "gitHub" not in briefing.headline
+    assert "Github" not in briefing.headline
+
+
 def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:
     path = "app/(secure)/admin/projects/[projectId]/page.tsx"
     review_context = build_review_context(
         [review_record("reviewer", ReviewState.COMMENTED)],
         [
             review_comment(901, "reviewer", "Please revise this.", path=path),
-            review_comment(902, "octocat", "Fixed.", path=path, in_reply_to_id=901, created_at=BASE_TIME.replace(minute=1)),
+            review_comment(902, "review-author", "Fixed.", path=path, in_reply_to_id=901, created_at=BASE_TIME.replace(minute=1)),
             review_comment(903, "reviewer", "Outdated concern.", path="backend/old.py", current_position=None),
         ],
         reviews_complete=True,
         comments_complete=True,
         review_pages_fetched=1,
         comment_pages_fetched=1,
-        pr_author_login="octocat",
+        pr_author_login="review-author",
         head_sha="head",
     )
     result = snapshot([changed_file(path, additions=220, deletions=159), changed_file("backend/old.py")], review_context=review_context)
@@ -331,13 +365,13 @@ def test_author_described_change_produces_verification_step_without_resolution_c
         [review_record("reviewer", ReviewState.COMMENTED)],
         [
             review_comment(904, "reviewer", "Please preserve status while switching tabs.", path=path),
-            review_comment(905, "octocat", "Both links now include the active status.", path=path, in_reply_to_id=904, created_at=BASE_TIME.replace(minute=1)),
+            review_comment(905, "review-author", "Both links now include the active status.", path=path, in_reply_to_id=904, created_at=BASE_TIME.replace(minute=1)),
         ],
         reviews_complete=True,
         comments_complete=True,
         review_pages_fetched=1,
         comment_pages_fetched=1,
-        pr_author_login="octocat",
+        pr_author_login="review-author",
         head_sha="head",
     )
     result = snapshot([changed_file(path, additions=220, deletions=159)], review_context=review_context)

@@ -15,7 +15,7 @@ from app.domain.pull_request import (
 )
 from app.domain.review_action import ReviewAction
 from app.domain.review_signal import SignalSeverity
-from app.services.ci_explanation import actionable_ci_description, actionable_ci_title
+from app.services.ci_explanation import actionable_ci_description, actionable_ci_title, ci_provider_display_name
 
 MAX_FOCUS_ITEMS = 3
 MAX_PRIORITY_FILES = 3
@@ -383,9 +383,21 @@ def _headline(snapshot: PullRequestSnapshot, primary: ReviewBriefingReason | Non
 
 
 def _sentence_fragment(value: str) -> str:
-    if any(provider in value for provider in ("GitHub Actions", "GitHub", "Vercel", "CircleCI")):
-        return value[:1].lower() + value[1:]
-    return value.lower()
+    fragment = value.strip()
+    if not fragment:
+        return fragment
+
+    words = fragment.split()
+    for word_count in (2, 1):
+        if len(words) < word_count:
+            continue
+        candidate = " ".join(words[:word_count])
+        normalized = candidate.casefold().replace("_", " ").replace("-", " ")
+        if normalized in {"github actions", "github checks", "github", "vercel", "circleci", "circle ci", "ci"}:
+            prefix_length = len(candidate)
+            return f"{ci_provider_display_name(candidate)}{fragment[prefix_length:]}"
+
+    return fragment[:1].lower() + fragment[1:]
 
 
 def _summary(snapshot: PullRequestSnapshot, focus: list[ReviewBriefingFocusItem], files: list[ReviewBriefingPriorityFile]) -> str:

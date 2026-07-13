@@ -8,7 +8,7 @@ from app.domain.pull_request import (
     CiSurfaceType,
     CommitStatusRecord,
 )
-from app.services.ci_explanation import build_ci_explanation
+from app.services.ci_explanation import build_ci_explanation, ci_provider_display_name
 from app.services.ci_state import aggregate_ci_state
 
 
@@ -141,6 +141,25 @@ def test_ci_categories_are_deterministic(name: str, provider: str, description: 
 
     item = explanation.blocking_items[0] if explanation.blocking_items else explanation.surfaces[0].items[0]
     assert item.category == expected
+
+
+@pytest.mark.parametrize(
+    ("raw_label", "expected"),
+    [
+        ("github", "GitHub"),
+        ("gitHub", "GitHub"),
+        ("GITHUB", "GitHub"),
+        ("Github", "GitHub"),
+        ("github actions", "GitHub Actions"),
+        ("GITHUB_ACTIONS", "GitHub Actions"),
+        ("Github Actions", "GitHub Actions"),
+        ("github checks", "GitHub Checks"),
+        ("GITHUB-CHECKS", "GitHub Checks"),
+        ("internal ci", "Internal CI"),
+    ],
+)
+def test_provider_display_names_normalize_known_github_sources_and_keep_unknowns_readable(raw_label: str, expected: str) -> None:
+    assert ci_provider_display_name(raw_label) == expected
 
 
 def test_all_passing_summary_and_check_run_only_input() -> None:

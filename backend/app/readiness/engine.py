@@ -148,6 +148,8 @@ def _ci_failing_reason(snapshot: PullRequestSnapshot, signals: list[ReviewSignal
 def _signal_explanation(rule_id: str, observed_value: str) -> str:
     if rule_id == "readiness.caution.sensitive_change_without_tests":
         return "No test files were changed in this pull request."
+    if rule_id == "readiness.blocked.merge_conflict":
+        return "GitHub mergeability data reports a merge conflict condition."
     if rule_id == "readiness.blocked.ci_failing":
         return "The observable head-SHA CI surface contains a failing result."
     if rule_id == "readiness.not_ready.credential_like_literal":

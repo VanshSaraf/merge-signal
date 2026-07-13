@@ -180,8 +180,8 @@ def test_renamed_file_classifies_current_and_previous_paths_independently() -> N
     assert file.previous_classification.primary_kind == FileKind.DOCUMENTATION
 
 
-def test_nextjs_admin_dynamic_protected_route_context_and_domains() -> None:
-    classification = classify_path("app/(protected)/admin/cohort/[id]/page.tsx")
+def test_nextjs_admin_dynamic_route_group_context_and_domains() -> None:
+    classification = classify_path("app/(secure)/admin/projects/[projectId]/page.tsx")
 
     assert classification.primary_kind == FileKind.SOURCE
     assert classification.language == FileLanguage.TYPESCRIPT
@@ -189,13 +189,13 @@ def test_nextjs_admin_dynamic_protected_route_context_and_domains() -> None:
     assert classification.context.framework == "nextjs_app_router"
     assert classification.context.component_role == "route_page"
     assert "admin" in classification.context.areas
-    assert "protected_route_group" in classification.context.access_context
+    assert "route_group:secure" in classification.context.route_context
     assert "dynamic_route" in classification.context.route_context
     assert classification.context.is_dynamic_route is True
     assert classification.context.is_user_facing is True
-    assert classification.context.domains == ["cohort"]
-    assert "(protected)" not in classification.context.domains
-    assert "[id]" not in classification.context.domains
+    assert classification.context.domains == ["projects"]
+    assert "(secure)" not in classification.context.domains
+    assert "[projectId]" not in classification.context.domains
 
 
 def test_common_context_roles_are_path_based_and_unknown_stays_bounded() -> None:

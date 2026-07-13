@@ -14,7 +14,7 @@ It does not answer whether the underlying code is correct, whether a reviewer ac
 | --- | --- |
 | `awaiting_author_response` | A non-author root comment has no later author reply. |
 | `author_replied` | The PR author replied after the root comment without bounded addressed-claim wording. |
-| `author_described_changes` | The PR author replied with bounded change-oriented wording such as changed this, moved, removed, added, updated, implemented, adjusted, now preserves, now only runs, or no longer runs. This requires reviewer verification and is not proof of resolution. |
+| `author_described_changes` | The PR author replied with bounded change-oriented wording such as changed this, moved, removed, added, updated, implemented, adjusted, preserves the selected, now preserves, now only runs, now runs only, no longer run, or no longer runs. This requires reviewer verification and is not proof of resolution. |
 | `author_claimed_addressed` | The PR author used bounded wording such as fixed, addressed, updated, resolved, or done. This is a claim only. |
 | `reviewer_follow_up` | A non-author participant replied after the latest author reply. |
 | `outdated` | GitHub position metadata indicates the root inline comment no longer has a current position. |
@@ -39,6 +39,8 @@ These records are intentionally thread-scoped so one conversation cannot borrow 
 `review_context.concern_summary` reports total conversations, counts by attention state, conversations needing attention, active latest change requests, potentially stale approvals, and a concise deterministic summary.
 
 The summary is displayed in the overview and reviews report sections. It does not change merge risk, evidence confidence, or merge readiness.
+
+When author replies describe code changes, the summary intentionally states that reviewer confirmation is not visible. For example, two author-described replies are summarized as author replies with described changes for both conversations, not as resolved or verified concerns.
 
 ## Review Actions
 

@@ -244,7 +244,7 @@ def test_author_described_changes_requires_verification_without_claiming_resolut
         [],
         [
             comment(46, "reviewer", "Can the status survive tab changes?", created_at=BASE_TIME),
-            comment(47, "octocat", "The links now preserve the selected status.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=46),
+            comment(47, "octocat", "The links now preserve the selected filter.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=46),
         ],
         reviews_complete=True,
         comments_complete=True,
@@ -276,6 +276,60 @@ def test_author_described_changes_avoids_common_false_positive_words() -> None:
     )
 
     assert context.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
+
+
+def test_author_described_changes_matches_bounded_review_reply_phrases() -> None:
+    phrases = [
+        "The project summary loader no longer runs on the Settings view.",
+        "The project query no longer runs when mode is settings.",
+        "The review loader now only runs on the Review tab.",
+        "The metrics loader now runs only for review mode.",
+        "The project link preserves the selected filter.",
+        "The project edit link keeps the selected filter.",
+        "Moved the query behind the review-mode branch.",
+        "Removed the query from the settings view.",
+        "Added the condition before loading project members.",
+        "Changed the logic for review mode.",
+        "Updated the links to include status.",
+        "Adjusted the behavior for switching tabs.",
+        "Implemented the change in the route.",
+    ]
+
+    for index, phrase in enumerate(phrases, start=100):
+        context = build_review_context(
+            [],
+            [
+                comment(index, "reviewer", "Please update this.", created_at=BASE_TIME),
+                comment(index + 1000, "octocat", phrase, created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=index),
+            ],
+            reviews_complete=True,
+            comments_complete=True,
+            review_pages_fetched=0,
+            comment_pages_fetched=1,
+            pr_author_login="octocat",
+        )
+
+        assert context.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES
+
+
+def test_simple_author_acknowledgements_remain_author_replied() -> None:
+    acknowledgements = ["thanks", "noted", "understood", "will check", "looking into it"]
+
+    for index, phrase in enumerate(acknowledgements, start=200):
+        context = build_review_context(
+            [],
+            [
+                comment(index, "reviewer", "Please update this.", created_at=BASE_TIME),
+                comment(index + 1000, "octocat", phrase, created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=index),
+            ],
+            reviews_complete=True,
+            comments_complete=True,
+            review_pages_fetched=0,
+            comment_pages_fetched=1,
+            pr_author_login="octocat",
+        )
+
+        assert context.threads[0].lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_REPLIED
 
 
 def test_reviewer_follow_up_takes_priority_after_author_claim() -> None:
@@ -399,3 +453,41 @@ def test_author_replied_summary_is_grammatical_without_punctuation_only_text() -
 
     assert context.concern_summary.summary == "The author replied to 2 review conversations; reviewer confirmation is not visible."
     assert context.concern_summary.summary.strip(".")
+
+
+def test_mixed_author_reply_and_described_change_summary_is_non_duplicative() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(300, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(301, "octocat", "I can look at this soon.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=300),
+            comment(302, "reviewer", "Please preserve status.", created_at=BASE_TIME + timedelta(minutes=2)),
+            comment(303, "octocat", "Updated the links to include status.", created_at=BASE_TIME + timedelta(minutes=3), in_reply_to_id=302),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert context.concern_summary.summary == "The author replied to 2 review conversations and described changes for 1 review conversation; reviewer confirmation is not visible."
+
+
+def test_all_author_described_change_summary_keeps_verification_boundary() -> None:
+    context = build_review_context(
+        [],
+        [
+            comment(310, "reviewer", "Please update this.", created_at=BASE_TIME),
+            comment(311, "octocat", "The project summary loader no longer runs on the Settings view.", created_at=BASE_TIME + timedelta(minutes=1), in_reply_to_id=310),
+            comment(312, "reviewer", "Please preserve status.", created_at=BASE_TIME + timedelta(minutes=2)),
+            comment(313, "octocat", "Updated the links to preserve the selected filter.", created_at=BASE_TIME + timedelta(minutes=3), in_reply_to_id=312),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=0,
+        comment_pages_fetched=1,
+        pr_author_login="octocat",
+    )
+
+    assert context.concern_summary.summary == "The author replied to 2 review conversations and described changes for both; reviewer confirmation is not visible."

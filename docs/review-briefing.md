@@ -49,6 +49,8 @@ Focus items are ordered by deterministic precedence:
 
 The implementation deduplicates related evidence so a failing CI readiness reason, specific CI blocking item, CI signal, and CI action normally become one focus item. CI deduplication uses a canonical evidence identity derived from source type, normalized provider, normalized check or context name, and the safe details URL when present. Distinct failing checks keep distinct identities and remain separate.
 
+When a specific top-file step is available, the briefing suppresses the generic `Review highest-priority files` step for the same path. The explicit file step uses the canonical ranked-file path and may include compact context such as protected admin route, large change, review conversations, and missing paired test-file changes. This keeps the checklist focused without hiding the underlying ranked file or review-action data.
+
 ## Headlines
 
 Headlines use the current readiness status and the strongest traceable reason. CI headlines identify the observed failing surface when available, such as a provider-specific deployment or test check. Headlines never claim a PR is safe, bug-free, approved, or fully resolved.
@@ -62,7 +64,7 @@ Checklist output is stable plain text with up to five non-overlapping reviewer a
 [ ] Review the latest reviewer follow-up
 ```
 
-Checklist lines suppress generic CI wording when a more specific CI blocker exists. They avoid raw patches, comment technical IDs, credentials, and unsupported claims.
+Checklist lines suppress generic CI wording when a more specific CI blocker exists, and suppress generic file-review wording when a specific top-file step is already present. They avoid raw patches, comment technical IDs, credentials, and unsupported claims.
 
 ## Safe Links
 

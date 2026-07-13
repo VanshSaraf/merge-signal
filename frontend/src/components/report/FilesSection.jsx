@@ -62,7 +62,7 @@ export function FilesSection({ files, filteredFiles, filters, setFilters, resetF
                 <span className="diff-stat__delete">-{formatNumber(file.deletions)}</span>
                 <span>{formatNumber(file.changes)} total</span>
               </span>
-              <span>{(file.related_signal_ids ?? []).length} signals</span>
+              <span>{signalCountLabel(file.related_signal_ids ?? [])}</span>
               <button className="button button--secondary" type="button" onClick={(event) => openFile(file, event)}>Details</button>
             </article>
           ))}
@@ -90,4 +90,9 @@ function contextLabels(file) {
 
 function strongestReasons(file) {
   return (file.factors ?? []).slice(0, 2).map((factor) => factor.description);
+}
+
+function signalCountLabel(signalIds) {
+  const count = signalIds.length;
+  return `${count} ${count === 1 ? "signal" : "signals"}`;
 }

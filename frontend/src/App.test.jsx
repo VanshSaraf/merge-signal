@@ -302,7 +302,7 @@ function snapshotResponse(overrides = {}) {
       },
       {
         rank: 2,
-        path: "app/(protected)/admin/cohort/[id]/page.tsx",
+        path: "app/(secure)/admin/projects/[projectId]/page.tsx",
         score: 68,
         level: "high",
         primary_kind: "source",
@@ -322,9 +322,9 @@ function snapshotResponse(overrides = {}) {
           context: {
             framework: "nextjs_app_router",
             component_role: "route_page",
-            route_context: ["application_route", "dynamic_route", "route_group:protected"],
-            access_context: ["protected_route_group"],
-            domains: ["cohort"],
+            route_context: ["application_route", "dynamic_route", "route_group:secure"],
+            access_context: [],
+            domains: ["projects"],
             areas: ["admin", "frontend"],
             is_user_facing: true,
             is_dynamic_route: true,
@@ -566,6 +566,330 @@ function threadFixture(id, lifecycle, overrides = {}) {
     root_comment: rootComment,
     replies: overrides.replies ?? [],
   };
+}
+
+function auditedReviewerFlowSnapshot() {
+  const path = "app/(secure)/admin/projects/[projectId]/page.tsx";
+  const threads = [
+    threadFixture(8101, "author_described_changes", {
+      path,
+      line: 88,
+      reviewer_login: "reviewer-one",
+      review_id: 4201,
+      html_url: "https://github.com/sample-org/review-console/pull/42#discussion_r8101",
+      body_excerpt: "The project summary loader also runs in settings mode.",
+      summary: "Author described changes; reviewer verification is still needed.",
+      participant_logins: ["reviewer-one", "review-author"],
+      replies: [
+        {
+          id: 8102,
+          reviewer_login: "review-author",
+          body_excerpt: "The project summary loader no longer runs on the Settings view.",
+          created_at: "2026-07-13T10:11:00Z",
+          updated_at: null,
+          html_url: "https://github.com/sample-org/review-console/pull/42#discussion_r8102",
+          pull_request_review_id: 4201,
+          in_reply_to_id: 8101,
+          path,
+          line: 88,
+          current_position: 3,
+          original_position: 3,
+        },
+      ],
+    }),
+    threadFixture(8103, "author_described_changes", {
+      path,
+      line: 142,
+      reviewer_login: "reviewer-one",
+      review_id: 4201,
+      html_url: "https://github.com/sample-org/review-console/pull/42#discussion_r8103",
+      body_excerpt: "The navigation links drop the active project filter.",
+      summary: "Author described changes; reviewer verification is still needed.",
+      participant_logins: ["reviewer-one", "review-author"],
+      replies: [
+        {
+          id: 8104,
+          reviewer_login: "review-author",
+          body_excerpt: "Updated the links to preserve the selected filter.",
+          created_at: "2026-07-13T10:13:00Z",
+          updated_at: null,
+          html_url: "https://github.com/sample-org/review-console/pull/42#discussion_r8104",
+          pull_request_review_id: 4201,
+          in_reply_to_id: 8103,
+          path,
+          line: 142,
+          current_position: 5,
+          original_position: 5,
+        },
+      ],
+    }),
+  ];
+
+  return snapshotResponse({
+    reference: {
+      owner: "sample-org",
+      repository: "review-console",
+      pull_number: 42,
+      canonical_url: "https://github.com/sample-org/review-console/pull/42",
+    },
+    metadata: {
+      ...snapshotResponse().metadata,
+      title: "Admin projects review update",
+      author: { login: "review-author" },
+      head_branch: { ref: "feature/project-review-flow", sha: "fixture-head-sha", repository_full_name: "sample-org/review-console" },
+      additions: 204,
+      deletions: 175,
+      changed_files: 1,
+    },
+    files: [{ filename: path, patch: null }],
+    ci: { state: "failing", visibility: "complete" },
+    ci_explanation: {
+      overall_state: "failing",
+      visibility: "complete",
+      summary: "1 authorization/configuration check failing on Vercel.",
+      total_count: 1,
+      passing_count: 0,
+      failing_count: 1,
+      pending_count: 0,
+      neutral_count: 0,
+      skipped_count: 0,
+      unknown_count: 0,
+      warnings: [],
+      blocking_items: [
+        {
+          name: "Vercel",
+          provider: "Vercel",
+          source_type: "commit_status",
+          normalized_state: "failing",
+          category: "authorization_or_configuration",
+          description: "Authorization required to deploy.",
+          details_url: "https://vercel.com/git/authorize?repo=sample-org/review-console",
+          is_blocking: true,
+        },
+      ],
+      surfaces: [
+        {
+          provider: "Vercel",
+          source_type: "commit_status",
+          total_count: 1,
+          passing_count: 0,
+          failing_count: 1,
+          pending_count: 0,
+          neutral_count: 0,
+          skipped_count: 0,
+          unknown_count: 0,
+          items: [
+            {
+              name: "Vercel",
+              provider: "Vercel",
+              source_type: "commit_status",
+              normalized_state: "failing",
+              category: "authorization_or_configuration",
+              description: "Authorization required to deploy.",
+              details_url: "https://vercel.com/git/authorize?repo=sample-org/review-console",
+              is_blocking: true,
+            },
+          ],
+        },
+      ],
+    },
+    review_context: {
+      ...snapshotResponse().review_context,
+      review_count: 1,
+      comment_count: 4,
+      thread_count: 2,
+      approved_count: 0,
+      changes_requested_count: 1,
+      concern_summary: {
+        total_conversations: 2,
+        needing_attention_count: 2,
+        awaiting_author_response_count: 0,
+        author_replied_count: 0,
+        author_described_changes_count: 2,
+        author_claimed_addressed_count: 0,
+        reviewer_follow_up_count: 0,
+        outdated_count: 0,
+        informational_count: 0,
+        unknown_count: 0,
+        active_latest_change_request_count: 0,
+        potentially_stale_approval_count: 0,
+        summary: "The author replied to 2 review conversations and described changes for both; reviewer confirmation is not visible.",
+      },
+      latest_reviewer_states: [
+        { reviewer_login: "reviewer-one", state: "changes_requested", review_id: 4201, submitted_at: "2026-07-13T10:00:00Z" },
+      ],
+      reviews: [
+        { id: 4201, reviewer_login: "reviewer-one", state: "changes_requested", submitted_at: "2026-07-13T10:00:00Z", body_excerpt: "Please check the projects flow.", html_url: "https://github.com/sample-org/review-console/pull/42#pullrequestreview-4201", commit_sha: "fixture-head-sha" },
+      ],
+      threads,
+    },
+    signals: [
+      {
+        id: "testing.production_change_without_test_files",
+        rule_id: "testing.production_change_without_test_files",
+        title: "No test files were changed in this pull request",
+        description: "Production-relevant files changed and no current changed file is classified as a test.",
+        severity: "medium",
+        category: "testing",
+        affected_files: [path],
+      },
+    ],
+    signal_summary: { total_signals: 1 },
+    merge_readiness: {
+      decision: "blocked",
+      decisive_rule_id: "readiness.blocked.ci_failing",
+      reasons: [{ rule_id: "readiness.blocked.ci_failing", title: "CI is failing", effect: "block", explanation: "Blocked by a failed Vercel authorization/configuration check." }],
+      limitations: [],
+    },
+    merge_risk: { score: 25, level: "moderate", group_scores: [], contributions: [], limitations: ["Merge risk is deterministic."] },
+    evidence_confidence: { score: 100, level: "high", components: [], limitations: ["Evidence confidence measures visibility."] },
+    ranked_files: [
+      {
+        rank: 1,
+        path,
+        score: 69,
+        level: "high",
+        primary_kind: "source",
+        language: "typescript",
+        status: "modified",
+        additions: 204,
+        deletions: 175,
+        changes: 379,
+        areas: ["admin", "frontend"],
+        related_signal_ids: ["testing.production_change_without_test_files"],
+        change_magnitude: "large",
+        factors: [
+          { id: "context.admin_surface", category: "file_context", points: 8, description: "Path context identifies an admin surface.", evidence: ["Path contains an admin segment."] },
+          { id: "review_attention.author_described_changes", category: "review_attention", points: 10, description: "Author-described review conversations require reviewer verification.", related_thread_ids: ["review-thread-8101", "review-thread-8103"], evidence: ["2 review conversations are still unverified."] },
+          { id: "signal.testing.production_change_without_test_files", category: "signal_impact", points: 10, description: "Production change lacks a paired changed test file.", evidence: ["Signal rule explicitly affected this file."] },
+        ],
+        limitations: ["Ranking does not replace human review."],
+        classification: {
+          context: {
+            framework: "nextjs_app_router",
+            component_role: "route_page",
+            route_context: ["application_route", "dynamic_route", "route_group:secure"],
+            access_context: [],
+            domains: ["projects"],
+            areas: ["admin", "frontend"],
+            is_user_facing: true,
+            is_dynamic_route: true,
+            classification_confidence: "high",
+            evidence: [],
+          },
+          matches: [],
+        },
+      },
+    ],
+    review_actions: [
+      {
+        id: "action.review_concern.verify_author_response.8101",
+        rule_id: "action.review_concern.verify_author_response",
+        title: "Verify the author response",
+        description: "Author described changes; reviewer verification is still needed.",
+        priority: "medium",
+        category: "review",
+        affected_files: [path],
+        related_signal_ids: [],
+        related_readiness_rule_ids: [],
+        evidence: ["Author described changes; reviewer verification is still needed."],
+        limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
+      },
+      {
+        id: "action.review_test_coverage.production_without_tests",
+        rule_id: "action.review_test_coverage.production_without_tests",
+        title: "Review production change test evidence",
+        description: "Confirm the production change has adequate test coverage even though no test files changed.",
+        priority: "medium",
+        category: "testing",
+        affected_files: [path],
+        related_signal_ids: ["testing.production_change_without_test_files"],
+        related_readiness_rule_ids: [],
+        evidence: ["No changed file was classified as a test."],
+        limitations: ["This does not prove test coverage is absent."],
+      },
+      {
+        id: "action.review_highest_priority_files",
+        rule_id: "action.review_highest_priority_files",
+        title: "Review highest-priority files",
+        description: "Use the highest-ranked changed files as a review-order starting point.",
+        priority: "low",
+        category: "file_review",
+        affected_files: [path],
+        related_signal_ids: [],
+        related_readiness_rule_ids: [],
+        evidence: ["Lower-ranked files must not be ignored."],
+        limitations: ["Actions describe what to verify next; they do not prescribe code changes."],
+      },
+    ],
+    review_action_summary: { total_actions: 3, limitations: [] },
+    review_briefing: {
+      status: "blocked",
+      headline: "Blocked by failed vercel authorization/configuration check.",
+      summary: "Blocked readiness; 25/100 merge risk; 100/100 evidence confidence; 2 review focus items; start with app/(secure)/admin/projects/[projectId]/page.tsx.",
+      primary_reason: {
+        title: "Inspect failed Vercel authorization/configuration check",
+        category: "ci",
+        severity: "high",
+        source_type: "ci",
+        source_ids: ["ci:commit_status:vercel:vercel:https://vercel.com/git/authorize"],
+        affected_files: [],
+        url: "https://vercel.com/git/authorize?repo=sample-org/review-console",
+      },
+      review_focus: [
+        {
+          title: "Inspect failed Vercel authorization/configuration check",
+          description: "Authorization required to deploy.",
+          severity: "high",
+          source_type: "ci",
+          affected_files: [],
+          url: "https://vercel.com/git/authorize?repo=sample-org/review-console",
+          provenance: ["ci:commit_status:vercel:vercel:https://vercel.com/git/authorize"],
+        },
+        {
+          title: "Verify the author response",
+          description: "Author described changes in 2 review conversations; reviewer verification is still needed.",
+          severity: "medium",
+          source_type: "review_concern",
+          affected_files: [path],
+          url: "https://github.com/sample-org/review-console/pull/42#discussion_r8101",
+          provenance: ["review-thread-8101", "review-thread-8103"],
+        },
+      ],
+      priority_files: [
+        {
+          path,
+          rank: 1,
+          score: 69,
+          level: "high",
+          reasons: ["Path context identifies an admin surface.", "Author-described review conversations require reviewer verification."],
+          url: "https://github.com/sample-org/review-console/blob/fixture-head-sha/app/%28secure%29/admin/projects/%5BprojectId%5D/page.tsx",
+        },
+      ],
+      recommended_steps: [
+        { order: 1, title: "Inspect failed Vercel authorization/configuration check", description: "Authorization required to deploy.", category: "ci", affected_files: [], url: "https://vercel.com/git/authorize?repo=sample-org/review-console", source_ids: ["ci:commit_status:vercel:vercel:https://vercel.com/git/authorize"] },
+        { order: 2, title: "Verify the author response", description: "Author described changes in 2 review conversations; reviewer verification is still needed.", category: "review_concern", affected_files: [path], url: "https://github.com/sample-org/review-console/pull/42#discussion_r8101", source_ids: ["review-thread-8101", "review-thread-8103"] },
+        { order: 3, title: "Review production change test evidence", description: "Confirm the production change has adequate test coverage even though no test files changed.", category: "testing", affected_files: [path], url: null, source_ids: ["action.review_test_coverage.production_without_tests"] },
+        { order: 4, title: `Review ${path}`, description: "Large admin route change with review conversations and no corresponding test-file change.", category: "file_review", affected_files: [path], url: "https://github.com/sample-org/review-console/blob/fixture-head-sha/app/%28secure%29/admin/projects/%5BprojectId%5D/page.tsx", source_ids: [path] },
+      ],
+      checklist: [
+        "MergeSignal Review Checklist",
+        "PR: sample-org/review-console#42",
+        "Status: Blocked",
+        "[ ] Inspect failed Vercel authorization/configuration check",
+        "[ ] Verify the author response",
+      ],
+      limitations: ["Human review remains necessary."],
+      provenance: {
+        readiness_reason_ids: ["readiness.blocked.ci_failing"],
+        ci_item_ids: ["ci:commit_status:vercel:vercel:https://vercel.com/git/authorize"],
+        signal_ids: ["testing.production_change_without_test_files"],
+        action_ids: ["action.review_concern.verify_author_response.8101", "action.review_test_coverage.production_without_tests"],
+        file_paths: [path],
+        review_thread_ids: ["review-thread-8101", "review-thread-8103"],
+      },
+    },
+  });
 }
 
 function renderApp() {
@@ -908,6 +1232,78 @@ describe("App", () => {
     expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
   });
 
+  it("renders audited reviewer-flow output without duplicate blockers or lost file signals", async () => {
+    const user = userEvent.setup();
+    const snapshot = auditedReviewerFlowSnapshot();
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshot);
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), "https://github.com/sample-org/review-console/pull/42");
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    expect(await screen.findByText("sample-org/review-console")).toBeInTheDocument();
+    expect(screen.getAllByText("Blocked").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("25/100").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("100/100").length).toBeGreaterThan(0);
+
+    const briefing = screen.getByLabelText("Review briefing");
+    expect(briefing).toHaveTextContent("Blocked by failed vercel authorization/configuration check.");
+    expect(briefing).toHaveTextContent("Inspect failed Vercel authorization/configuration check");
+    expect(briefing).toHaveTextContent("Verify the author response");
+    expect(briefing).toHaveTextContent("Review production change test evidence");
+    expect(briefing).toHaveTextContent("Review app/(secure)/admin/projects/[projectId]/page.tsx");
+    expect(briefing).toHaveTextContent("Large admin route change with review conversations and no corresponding test-file change.");
+    expect(briefing).not.toHaveTextContent("CI reports a failing state");
+    expect(briefing).not.toHaveTextContent("Inspect failing CI");
+    expect(briefing).not.toHaveTextContent("Review highest-priority files");
+
+    const ciSummary = screen.getByRole("region", { name: "CI surface summary" });
+    expect(ciSummary).toHaveTextContent("Vercel");
+    expect(ciSummary).toHaveTextContent("Authorization required to deploy.");
+    expect(ciSummary).not.toHaveTextContent("VercelVercel");
+    expect(ciSummary).not.toHaveTextContent(/failed tests/i);
+
+    expect(screen.getByLabelText("Review context summary")).toHaveTextContent("2 review conversations need attention");
+    expect(screen.getByLabelText("Review context summary")).toHaveTextContent("2 author responses need verification");
+    expect(screen.getByLabelText("Review context summary")).not.toHaveTextContent(/^\.$/);
+    expect(screen.queryByText("undefined")).not.toBeInTheDocument();
+    expect(screen.queryByText("null")).not.toBeInTheDocument();
+    expect(screen.queryByText("true inline conversations")).not.toBeInTheDocument();
+    expect(screen.queryByText("VercelVercel")).not.toBeInTheDocument();
+    expect(screen.queryByText(/<script|Authorization:|Bearer|@@|diff --git/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Reviews (2)" }));
+    expect(screen.getByLabelText("Observable review-state summary")).toHaveTextContent("Author response needs verification");
+    expect(screen.getByText("app/(secure)/admin/projects/[projectId]/page.tsx:L88")).toBeInTheDocument();
+    expect(screen.getByText("app/(secure)/admin/projects/[projectId]/page.tsx:L142")).toBeInTheDocument();
+    expect(screen.getAllByText("Author response needs verification").length).toBeGreaterThan(0);
+
+    const firstConversation = screen.getAllByRole("button", { name: "View conversation" })[0];
+    await user.click(firstConversation);
+    expect(screen.getByText("Root comment · reviewer-one")).toBeInTheDocument();
+    expect(screen.getByText("Reply · review-author")).toBeInTheDocument();
+    expect(screen.getAllByText("The project summary loader also runs in settings mode.").length).toBeGreaterThan(0);
+    expect(screen.getByText("The project summary loader no longer runs on the Settings view.")).toBeInTheDocument();
+    expect(screen.getByText("MergeSignal cannot verify that the code change resolves this concern.")).toBeInTheDocument();
+    expect(screen.queryByText(/formally resolved|verified fix/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Technical details").closest("details")).not.toHaveAttribute("open");
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+    expect(screen.getByText("1 signal")).toBeInTheDocument();
+    expect(screen.queryByText("ci.failing:fixture")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    expect(screen.getByRole("dialog", { name: /app\/\(secure\)\/admin\/projects/i })).toBeInTheDocument();
+    expect(screen.getByText(/Production change lacks a paired changed test file/i)).toBeInTheDocument();
+    expect(screen.getByText("Related signal IDs")).toBeInTheDocument();
+    expect(screen.getByText("testing.production_change_without_test_files")).toBeInTheDocument();
+    expect(screen.queryByText("ci:commit_status:vercel:vercel:https://vercel.com/git/authorize")).not.toBeInTheDocument();
+  });
+
   it("renders review context summary, conversations, safe links, and hidden technical details", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -1166,10 +1562,10 @@ describe("App", () => {
     await user.click(await screen.findByRole("tab", { name: "Files" }));
 
     expect(screen.getByText("backend/app/security/secrets.py")).toBeInTheDocument();
-    expect(screen.getByText("app/(protected)/admin/cohort/[id]/page.tsx")).toBeInTheDocument();
-    expect(screen.getAllByText("1 signals").length).toBeGreaterThan(0);
+    expect(screen.getByText("app/(secure)/admin/projects/[projectId]/page.tsx")).toBeInTheDocument();
+    expect(screen.getAllByText("1 signal").length).toBeGreaterThan(0);
     expect(screen.getByText("Admin")).toBeInTheDocument();
-    expect(screen.getByText("Protected route")).toBeInTheDocument();
+    expect(screen.queryByText("Protected route")).not.toBeInTheDocument();
     expect(screen.getByText("Dynamic page")).toBeInTheDocument();
     expect(screen.getByText(/Path context identifies an admin surface/i)).toBeInTheDocument();
     expect(screen.getByText("backend/app/auth/roles.py")).toBeInTheDocument();
@@ -1192,7 +1588,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
     await user.selectOptions(screen.getByLabelText("Magnitude"), "large");
-    expect(screen.getByText("app/(protected)/admin/cohort/[id]/page.tsx")).toBeInTheDocument();
+    expect(screen.getByText("app/(secure)/admin/projects/[projectId]/page.tsx")).toBeInTheDocument();
     expect(screen.queryByText("backend/app/security/secrets.py")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
@@ -1210,11 +1606,11 @@ describe("App", () => {
 
     const routeDetailsButton = screen.getAllByRole("button", { name: "Details" })[0];
     await user.click(routeDetailsButton);
-    expect(screen.getByRole("dialog", { name: /app\/\(protected\)\/admin/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /app\/\(secure\)\/admin/i })).toBeInTheDocument();
     expect(screen.getByText("Priority factors")).toBeInTheDocument();
     expect(screen.getByText("File context")).toBeInTheDocument();
     expect(screen.getByText(/Framework: Nextjs App Router/i)).toBeInTheDocument();
-    expect(screen.getByText(/Domains: cohort/i)).toBeInTheDocument();
+    expect(screen.getByText(/Domains: projects/i)).toBeInTheDocument();
     expect(screen.getByText("context.admin_surface")).not.toBeVisible();
     await user.click(screen.getByText("Technical factor details"));
     expect(screen.getByText("context.admin_surface")).toBeInTheDocument();
@@ -1512,6 +1908,39 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
 
     expect(await screen.findByText("Invalid pull-request URL")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
+  });
+
+  it("renders GitHub rate-limit errors as retryable without leaking transport details", async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      if (global.fetch.mock.calls.filter(([calledUrl]) => String(calledUrl).includes("/snapshot")).length === 1) {
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          json: () =>
+            Promise.resolve({
+              error: { code: "GITHUB_RATE_LIMITED", message: "GitHub rate limiting was detected." },
+            }),
+        });
+      }
+      return okSnapshot();
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    expect(await screen.findByText("GitHub rate limit reached")).toBeInTheDocument();
+    expect(screen.getByText(/GitHub temporarily rejected the request because the rate limit was reached/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("GitHub PR URL")).toHaveValue(validUrl);
+    expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+    expect(screen.queryByText(/authorization|bearer|x-ratelimit|token/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();

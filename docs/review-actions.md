@@ -11,7 +11,7 @@ Snapshot responses include:
 - `review_actions`: deduplicated review prompts with priority, category, related signals, related readiness rules, affected files, safe evidence, and limitations.
 - `review_action_summary`: counts by priority and category, affected-file count, high-priority action count, rule version, and limitations.
 
-The Review Briefing may reuse selected actions as recommended steps, but it does not convert every action into a focus item.
+The Review Briefing may reuse selected actions as recommended steps, but it does not convert every action into a focus item. It may also suppress a generic action step when a more specific briefing step already covers the same CI blocker, review concern, or top-ranked file.
 
 ## Priorities And Categories
 
@@ -45,6 +45,7 @@ Suppression keeps output concise:
 - Reviewer follow-ups and active latest change requests take precedence over lower-priority concern states for a conversation.
 - Author-described-change actions ask for verification and do not claim the response resolved the concern.
 - The baseline file-review action never replaces specific actions.
+- The Review Briefing suppresses the baseline file-review action when it emits a specific top-file step for the same canonical path.
 
 Affected files are ordered by ranked-file position when available, then by path case-insensitively, then by original path.
 

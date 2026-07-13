@@ -26,7 +26,7 @@ export function friendlyError(error) {
     return { title: "Repository is inaccessible", detail: "The repository may be private or unavailable to the configured backend." };
   }
   if (code === "GITHUB_RATE_LIMITED") {
-    return { title: "GitHub rate limit reached", detail: "Try again after the backend has rate-limit capacity." };
+    return { title: "GitHub rate limit reached", detail: "GitHub temporarily rejected the request because the rate limit was reached. Retry when capacity is available." };
   }
   if (code === "BACKEND_UNAVAILABLE") {
     return { title: "Backend unavailable", detail: "Start the FastAPI backend and retry the analysis." };

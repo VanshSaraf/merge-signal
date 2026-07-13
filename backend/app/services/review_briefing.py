@@ -86,6 +86,7 @@ def _ci_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
 
 def _review_concern_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingFocusItem]:
     items: list[ReviewBriefingFocusItem] = []
+    author_described_threads = []
     for thread in snapshot.review_context.threads:
         if thread.lifecycle.attention_state == ReviewConcernAttentionState.OUTDATED:
             continue
@@ -98,7 +99,9 @@ def _review_concern_focus(snapshot: PullRequestSnapshot) -> list[ReviewBriefingF
         elif thread.lifecycle.author_claimed_addressed:
             items.append(_thread_focus(thread, "Verify the author's claimed fix", "The author claims this concern was addressed; MergeSignal has not verified the code change.", "medium"))
         elif thread.lifecycle.attention_state == ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES:
-            items.append(_thread_focus(thread, "Verify the author response", "Author described changes; reviewer verification is still needed.", "medium"))
+            author_described_threads.append(thread)
+    if author_described_threads:
+        items.append(_grouped_author_response_focus(author_described_threads))
     return sorted(items, key=lambda item: (_severity_order(item.severity), item.affected_files, item.title))
 
 
@@ -111,6 +114,25 @@ def _thread_focus(thread, title: str, description: str, severity: str) -> Review
         affected_files=[thread.path] if thread.path else [],
         url=_safe_url(thread.html_url),
         provenance=[thread.id],
+    )
+
+
+def _grouped_author_response_focus(threads) -> ReviewBriefingFocusItem:
+    count = len(threads)
+    description = (
+        "Author described changes; reviewer verification is still needed."
+        if count == 1
+        else f"Author described changes in {count} review conversations; reviewer verification is still needed."
+    )
+    affected_files = sorted({thread.path for thread in threads if thread.path}, key=lambda path: (path.casefold(), path))
+    return ReviewBriefingFocusItem(
+        title="Verify the author response",
+        description=description,
+        severity="medium",
+        source_type=BriefingSourceType.REVIEW_CONCERN,
+        affected_files=affected_files,
+        url=_safe_url(threads[0].html_url),
+        provenance=sorted({thread.id for thread in threads}),
     )
 
 
@@ -205,6 +227,7 @@ def _recommended_steps(
 ) -> list[ReviewBriefingStep]:
     steps: list[ReviewBriefingStep] = []
     seen: set[str] = set()
+    focus_thread_ids = {id for item in focus for id in item.provenance if id.startswith("review-thread-")}
     for item in focus:
         _append_step(
             steps,
@@ -216,18 +239,24 @@ def _recommended_steps(
             url=item.url,
             source_ids=item.provenance,
         )
+    priority_paths = {file.path for file in priority_files}
+    reserved_file_slots = 1 if priority_files else 0
     for action in snapshot.review_actions:
         if _is_generic_ci_action(action) and canonical_ci_ids:
             continue
-        _append_action_step(steps, seen, action)
-        if len(steps) >= MAX_STEPS:
+        if _is_generic_file_review_action(action, priority_paths):
+            continue
+        if _is_duplicate_review_concern_action(action, focus_thread_ids):
+            continue
+        if len(steps) >= MAX_STEPS - reserved_file_slots:
             break
+        _append_action_step(steps, seen, action)
     for file in priority_files:
         _append_step(
             steps,
             seen,
             title=f"Review {file.path}",
-            description="; ".join(file.reasons) or f"{file.level} priority changed file.",
+            description=_priority_file_step_description(snapshot, file),
             category="file_priority",
             affected_files=[file.path],
             url=file.url,
@@ -409,8 +438,70 @@ def _is_generic_ci_action(action: ReviewAction) -> bool:
     return action.rule_id == "action.inspect_failing_ci"
 
 
+def _is_generic_file_review_action(action: ReviewAction, priority_paths: set[str]) -> bool:
+    if action.rule_id != "action.review_highest_priority_files":
+        return False
+    return bool(priority_paths & set(action.affected_files))
+
+
+def _is_duplicate_review_concern_action(action: ReviewAction, focus_thread_ids: set[str]) -> bool:
+    if not action.rule_id.startswith("action.review_concern."):
+        return False
+    return bool(set(_review_thread_ids_from_evidence(action.evidence)) & focus_thread_ids)
+
+
 def _file_reason_text(file) -> str:
     return "; ".join(factor.description for factor in file.factors[:2]) or f"{file.level.value} priority changed file."
+
+
+def _priority_file_step_description(snapshot: PullRequestSnapshot, priority_file: ReviewBriefingPriorityFile) -> str:
+    ranked = next((file for file in snapshot.ranked_files if file.path == priority_file.path), None)
+    if ranked is None:
+        return "; ".join(priority_file.reasons) or f"{priority_file.level} priority changed file."
+    parts: list[str] = []
+    context_phrase = _file_context_phrase(ranked)
+    magnitude = str(ranked.change_magnitude.value).replace("_", " ")
+    if magnitude in {"large", "very large"}:
+        parts.append(f"{magnitude.title()} {context_phrase} change")
+    else:
+        parts.append(f"{context_phrase.capitalize()} change")
+    if _has_review_conversations(snapshot, ranked.path):
+        parts.append("with review conversations")
+    if _has_test_gap_signal(snapshot, ranked.related_signal_ids):
+        parts.append("and no corresponding test-file change")
+    elif ranked.factors:
+        parts.append(f"prioritized because {ranked.factors[0].description.rstrip('.').lower()}")
+    return " ".join(parts).rstrip(".") + "."
+
+
+def _file_context_phrase(file) -> str:
+    context = file.context
+    words: list[str] = []
+    if "protected_route_group" in context.access_context:
+        words.append("protected")
+    if "admin" in context.areas:
+        words.append("admin")
+    if context.component_role == "route_page":
+        words.append("route")
+    elif context.is_user_facing:
+        words.append("user-facing")
+    if not words:
+        kind = str(file.primary_kind.value).replace("_", " ")
+        words.append(kind)
+    return " ".join(words)
+
+
+def _has_review_conversations(snapshot: PullRequestSnapshot, path: str) -> bool:
+    return any(thread.path == path and thread.lifecycle.attention_state != ReviewConcernAttentionState.OUTDATED for thread in snapshot.review_context.threads)
+
+
+def _has_test_gap_signal(snapshot: PullRequestSnapshot, signal_ids: list[str]) -> bool:
+    signal_by_id = {signal.id: signal for signal in snapshot.signals}
+    return any(
+        signal_by_id[signal_id].rule_id in {"testing.production_change_without_test_files", "testing.sensitive_change_without_test_files"}
+        for signal_id in signal_ids
+        if signal_id in signal_by_id
+    )
 
 
 def _file_url(snapshot: PullRequestSnapshot, path: str) -> str | None:

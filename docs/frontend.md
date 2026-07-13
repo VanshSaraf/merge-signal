@@ -107,3 +107,7 @@ The mobile landing order is header, product label and headline, explanation, ana
 ## Error Handling
 
 The frontend distinguishes invalid URLs, not found responses, access-denied/private repository cases, GitHub rate limits, temporary upstream failures, backend unavailability, and unexpected response shapes where the backend provides enough signal. It never displays stack traces or raw internal errors.
+
+Rate-limit errors remain retryable and keep the entered pull-request URL in the command form. The message identifies GitHub as the temporarily rejecting service without rendering transport headers, tokens, raw API payloads, or rate-limit internals.
+
+Regression fixtures cover reviewer-flow reports with a Vercel authorization/configuration blocker, author-described review replies requiring verification, specific top-file review steps, and file-signal traceability for production changes without paired test-file changes. The UI keeps technical provenance hidden by default while preserving expandable detail for deterministic evidence.

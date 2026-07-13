@@ -80,6 +80,22 @@ def high_signal(path: str, signal_id: str = "sig-high") -> ReviewSignal:
     )
 
 
+def production_without_tests_signal(path: str) -> ReviewSignal:
+    return ReviewSignal(
+        id="testing.production_change_without_test_files",
+        rule_id="testing.production_change_without_test_files",
+        title="No test files were changed in this pull request",
+        description="Production-relevant files changed and no current changed file is classified as a test.",
+        category=SignalCategory.TESTING,
+        severity=SignalSeverity.MEDIUM,
+        scope=SignalScope.FILE_SET,
+        affected_files=[path],
+        evidence=[SignalEvidence(kind=EvidenceKind.METADATA, message="Fixture evidence.")],
+        limitations=["This does not prove test coverage is absent."],
+        tags=["testing"],
+    )
+
+
 def snapshot(files: list[ChangedFile], *, ci: PullRequestCi | None = None, review_context=None, signals: list[ReviewSignal] | None = None, files_complete: bool = True) -> PullRequestSnapshot:
     classified_files, classification_summary = classify_changed_files(files)
     ci = ci or passing_ci()
@@ -234,7 +250,7 @@ def test_distinct_ci_failures_remain_distinct_in_briefing() -> None:
 
 
 def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified() -> None:
-    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    path = "app/(secure)/admin/projects/[projectId]/page.tsx"
     review_context = build_review_context(
         [review_record("reviewer", ReviewState.COMMENTED)],
         [
@@ -260,7 +276,7 @@ def test_briefing_uses_review_concerns_without_treating_author_claim_as_verified
 
 
 def test_author_described_change_produces_verification_step_without_resolution_claim() -> None:
-    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    path = "app/(secure)/admin/projects/[projectId]/page.tsx"
     review_context = build_review_context(
         [review_record("reviewer", ReviewState.COMMENTED)],
         [
@@ -280,6 +296,55 @@ def test_author_described_change_produces_verification_step_without_resolution_c
     assert any(step.title == "Verify the author response" for step in result.review_briefing.recommended_steps)
     assert "verified fix" not in briefing_text.casefold()
     assert "reviewer verification is still needed" in briefing_text.casefold()
+
+
+def test_audited_pr_shape_deduplicates_ci_review_and_file_steps() -> None:
+    path = "app/(secure)/admin/projects/[projectId]/page.tsx"
+    review_context = build_review_context(
+        [review_record("reviewer", ReviewState.COMMENTED)],
+        [
+            review_comment(8101, "reviewer-one", "The project summary loader also runs in settings mode.", path=path),
+            review_comment(8102, "review-author", "The project summary loader no longer runs on the Settings view.", path=path, in_reply_to_id=8101, created_at=BASE_TIME.replace(minute=1)),
+            review_comment(8103, "reviewer-one", "The navigation links drop the active project filter.", path=path, created_at=BASE_TIME.replace(minute=2)),
+            review_comment(8104, "review-author", "Updated the links to preserve the selected filter.", path=path, in_reply_to_id=8103, created_at=BASE_TIME.replace(minute=3)),
+        ],
+        reviews_complete=True,
+        comments_complete=True,
+        review_pages_fetched=1,
+        comment_pages_fetched=1,
+        pr_author_login="review-author",
+        head_sha="fixture-head-sha",
+    )
+    result = snapshot(
+        [changed_file(path, additions=204, deletions=175)],
+        ci=failing_vercel_ci(),
+        review_context=review_context,
+        signals=[production_without_tests_signal(path)],
+    )
+    briefing = result.review_briefing
+    step_titles = [step.title for step in briefing.recommended_steps]
+    checklist = "\n".join(briefing.checklist)
+
+    assert result.merge_readiness.decision.value == "blocked"
+    assert result.merge_risk.score == 7
+    assert result.evidence_confidence.score == 100
+    assert [item.title for item in briefing.review_focus] == [
+        "Inspect failed Vercel authorization/configuration check",
+        "Verify the author response",
+    ]
+    assert step_titles == [
+        "Inspect failed Vercel authorization/configuration check",
+        "Verify the author response",
+        "Review production change test evidence",
+        f"Review {path}",
+    ]
+    assert "Review highest-priority files" not in step_titles
+    assert "Inspect failing CI" not in step_titles
+    assert checklist.count("Vercel") == 1
+    assert "Review highest-priority files" not in checklist
+    assert len(briefing.checklist) <= 5
+    file_step = next(step for step in briefing.recommended_steps if step.title == f"Review {path}")
+    assert file_step.description == "Large admin route change with review conversations and no corresponding test-file change."
 
 
 def test_briefing_limits_items_deduplicates_and_keeps_current_snapshot_provenance() -> None:

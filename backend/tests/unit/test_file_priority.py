@@ -295,11 +295,11 @@ def test_every_changed_file_is_ranked_and_zero_score_files_remain_present() -> N
 
 
 def test_nextjs_context_and_review_concerns_lift_large_admin_route_out_of_low_priority() -> None:
-    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    path = "app/(secure)/admin/projects/[projectId]/page.tsx"
     review_context = build_review_context(
         [review_record("reviewer", ReviewState.CHANGES_REQUESTED)],
         [
-            review_comment(901, "reviewer", "Please fix the cohort transition.", path=path),
+            review_comment(901, "reviewer", "Please fix the projects transition.", path=path),
             review_comment(902, "octocat", "Fixed.", path=path, created_at=BASE_TIME.replace(minute=1), in_reply_to_id=901),
         ],
         reviews_complete=True,
@@ -320,8 +320,8 @@ def test_nextjs_context_and_review_concerns_lift_large_admin_route_out_of_low_pr
     assert file.context.framework == "nextjs_app_router"
     assert file.context.component_role == "route_page"
     assert "admin" in file.context.areas
-    assert "protected_route_group" in file.context.access_context
-    assert file.context.domains == ["cohort"]
+    assert "route_group:secure" in file.context.route_context
+    assert file.context.domains == ["projects"]
     assert file.context.is_dynamic_route is True
     assert file.change_magnitude == ChangeMagnitude.LARGE
     assert file.level in {FilePriorityLevel.HIGH, FilePriorityLevel.VERY_HIGH}
@@ -383,7 +383,7 @@ def test_signal_factors_apply_only_to_explicit_current_file_paths() -> None:
 
 
 def test_file_specific_signal_association_includes_non_weighted_related_signals() -> None:
-    path = "app/(protected)/admin/cohort/[id]/page.tsx"
+    path = "app/(secure)/admin/projects/[projectId]/page.tsx"
     signals = [signal("testing.production_change_without_test_files", signal_id="sig-tests", affected_files=[path], category=SignalCategory.TESTING)]
     ranked_files, _summary = calculate_file_priorities(
         snapshot([changed_file(path, additions=204, deletions=175, changes=379)], signals=signals)

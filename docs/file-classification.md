@@ -71,7 +71,7 @@ Route groups and dynamic parameters are not product domains. MergeSignal does no
 
 Domain extraction removes filenames, extensions, route groups, dynamic parameters, and generic segments such as `src`, `app`, `pages`, `components`, `lib`, `utils`, `services`, `api`, `tests`, and `test`.
 
-For example, `app/(protected)/admin/cohort/[id]/page.tsx` produces domain `cohort`, admin/frontend context, protected route-group context, dynamic route context, and route-page role. It does not produce `(protected)`, `admin`, `[id]`, or `page` as product domains.
+For example, `app/(secure)/admin/projects/[projectId]/page.tsx` produces domain `projects`, admin/frontend context, route-group context, dynamic route context, and route-page role. It does not produce `(secure)`, `admin`, `[projectId]`, or `page` as product domains.
 
 ## API Shape
 

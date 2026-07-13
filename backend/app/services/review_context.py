@@ -28,7 +28,7 @@ AUTHOR_ADDRESSED_PATTERN = re.compile(
     r"(?i)(\bfixed\b|\baddressed\b|\bupdated\b|\bresolved\b|\bdone\b|\bpushed\s+a\s+fix\b|\bhandled\s+this\b|\bchanged\s+this\b)"
 )
 AUTHOR_DESCRIBED_CHANGES_PATTERN = re.compile(
-    r"(?i)(\bchanged\s+(this|it|the|to|from)\b|\bmoved\b|\bremoved\b|\badded\b|\bupdated\b|\bimplemented\b|\badjusted\b|\bnow\s+includes?\b|\bnow\s+preserves?\b|\bnow\s+only\s+runs\b|\bno\s+longer\s+runs\b)"
+    r"(?i)(\bno\s+longer\s+runs?\b|\bnow\s+only\s+runs\b|\bnow\s+runs\s+only\b|\bnow\s+includes?\b|\bnow\s+preserves?\b|\bpreserves?\s+the\s+selected\b|\bkeeps?\s+the\s+selected\b|\bmoved\s+the\s+query\b|\bremoved\s+the\s+query\b|\badded\s+the\s+condition\b|\bchanged\s+the\s+logic\b|\bupdated\s+the\s+links\b|\badjusted\s+the\s+behavior\b|\bimplemented\s+the\s+change\b|\bchanged\s+(this|it|the|to|from)\b|\bmoved\b|\bremoved\b|\badded\b|\bupdated\b|\bimplemented\b|\badjusted\b)"
 )
 
 REVIEW_LIMITATIONS = [
@@ -292,16 +292,16 @@ def _derive_thread_lifecycle(
         needs_attention = True
         summary = "A non-author participant replied after the latest author response."
         provenance.append(_provenance("reviewer_follow_up", reviewer_follow_up, "Reviewer or non-author participant commented after the latest author reply."))
-    elif claimed_reply is not None:
-        state = ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED
-        needs_attention = True
-        summary = "The author claims this concern was addressed; reviewer confirmation is not visible."
-        provenance.append(_provenance("author_claim", claimed_reply, "Author reply matched bounded addressed-claim language."))
     elif described_reply is not None:
         state = ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES
         needs_attention = True
         summary = "Author described changes; reviewer verification is still needed."
         provenance.append(_provenance("author_described_changes", described_reply, "Author reply matched bounded change-description language."))
+    elif claimed_reply is not None:
+        state = ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED
+        needs_attention = True
+        summary = "The author claims this concern was addressed; reviewer confirmation is not visible."
+        provenance.append(_provenance("author_claim", claimed_reply, "Author reply matched bounded addressed-claim language."))
     elif latest_author_reply is not None:
         state = ReviewConcernAttentionState.AUTHOR_REPLIED
         needs_attention = active_change_request
@@ -345,7 +345,7 @@ def _derive_thread_lifecycle(
         verification_needed=state in {ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED, ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES},
         has_author_reply=bool(author_replies),
         has_reviewer_follow_up=reviewer_follow_up is not None,
-        author_claimed_addressed=claimed_reply is not None and reviewer_follow_up is None,
+        author_claimed_addressed=claimed_reply is not None and described_reply is None and reviewer_follow_up is None,
         author_described_changes=described_reply is not None and claimed_reply is None and reviewer_follow_up is None,
         is_outdated=is_outdated,
         resolution_visibility=ResolutionVisibility.UNAVAILABLE,
@@ -464,13 +464,24 @@ def _concern_summary_text(
     if state_counts[ReviewConcernAttentionState.AUTHOR_REPLIED] == total:
         return f"The author replied to {_conversation_count(total)}; reviewer confirmation is not visible."
     if state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES] == total:
-        return f"The author described changes in {_conversation_count(total)}; reviewer verification is still needed."
+        return f"The author replied to {_conversation_count(total)} and described changes for {_both_or_count(total)}; reviewer confirmation is not visible."
     if state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED] == total:
         return f"The author claimed {_conversation_count(total)} addressed; reviewer confirmation is not visible."
     if state_counts[ReviewConcernAttentionState.AWAITING_AUTHOR_RESPONSE] == total:
         return f"{_sentence_start_count(total)} {_needs_need(total)} an author response."
     if state_counts[ReviewConcernAttentionState.REVIEWER_FOLLOW_UP] == total:
         return f"{_sentence_start_count(total)} {_needs_need(total)} reviewer follow-up after an author response."
+
+    author_reply_total = (
+        state_counts[ReviewConcernAttentionState.AUTHOR_REPLIED]
+        + state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES]
+        + state_counts[ReviewConcernAttentionState.AUTHOR_CLAIMED_ADDRESSED]
+    )
+    if author_reply_total == total and state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES]:
+        described = state_counts[ReviewConcernAttentionState.AUTHOR_DESCRIBED_CHANGES]
+        if described == total:
+            return f"The author replied to {_conversation_count(total)} and described changes for {_both_or_count(described)}; reviewer confirmation is not visible."
+        return f"The author replied to {_conversation_count(total)} and described changes for {_conversation_count(described)}; reviewer confirmation is not visible."
 
     parts: list[str] = []
     if needing_attention:
@@ -500,6 +511,10 @@ def _conversation_count(count: int) -> str:
 
 def _sentence_start_count(count: int) -> str:
     return f"{count} {_plural('review conversation', count)}"
+
+
+def _both_or_count(count: int) -> str:
+    return "both" if count == 2 else _conversation_count(count)
 
 
 def _plural(word: str, count: int) -> str:

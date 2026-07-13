@@ -18,6 +18,8 @@ from app.domain.pull_request import (
     PullRequestReference,
     PullRequestSnapshot,
     SnapshotCompleteness,
+    CheckRunRecord,
+    CommitStatusRecord,
 )
 from app.domain.review_action import (
     ReviewAction,
@@ -33,6 +35,8 @@ from app.readiness import calculate_merge_readiness
 from app.review_actions import build_review_actions
 from app.review_actions.rules import REVIEW_ACTION_RULES_VERSION, RULES
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
+from app.services.ci_explanation import build_ci_explanation
+from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
 from app.signals.engine import analyze_snapshot_signals
 
@@ -91,10 +95,49 @@ def base_snapshot(
     signals: list[ReviewSignal] | None = None,
     ci_state: CiState = CiState.PASSING,
     ci_visibility: CiVisibility = CiVisibility.COMPLETE,
+    check_runs: list[CheckRunRecord] | None = None,
+    commit_statuses: list[CommitStatusRecord] | None = None,
     files_complete: bool = True,
     commits_complete: bool = True,
 ) -> PullRequestSnapshot:
     classified_files, classification_summary = classify_changed_files(files)
+    ci = (
+        aggregate_ci_state(
+            check_runs or [],
+            commit_statuses or [],
+            check_runs_complete=True,
+            commit_statuses_complete=True,
+            check_run_pages_fetched=1,
+            commit_status_pages_fetched=1,
+            total_check_runs=len(check_runs or []),
+        )
+        if check_runs is not None or commit_statuses is not None
+        else PullRequestCi(
+            state=ci_state,
+            visibility=ci_visibility,
+            check_runs=[],
+            commit_statuses=[],
+            total_check_runs=0,
+            total_status_contexts=0,
+            passing_count=1 if ci_state == CiState.PASSING else 0,
+            failing_count=1 if ci_state == CiState.FAILING else 0,
+            pending_count=1 if ci_state == CiState.PENDING else 0,
+            neutral_count=0,
+            skipped_count=0,
+            warnings=[],
+            fetched_at=BASE_TIME,
+            completeness=CiCompleteness(
+                check_runs_complete=ci_visibility != CiVisibility.UNAVAILABLE,
+                commit_statuses_complete=ci_visibility == CiVisibility.COMPLETE,
+                check_run_pages_fetched=1,
+                commit_status_pages_fetched=1,
+                raw_status_record_count=0,
+                unique_status_context_count=0,
+                warnings=[],
+            ),
+            rate_limit=None,
+        )
+    )
     return PullRequestSnapshot(
         reference=PullRequestReference(owner="octocat", repository="Hello-World", pull_number=42, canonical_url="https://github.com/octocat/Hello-World/pull/42"),
         metadata=PullRequestMetadata(
@@ -122,31 +165,8 @@ def base_snapshot(
         ),
         files=classified_files,
         commits=[PullRequestCommit(sha="commit", message="Fixture", html_url=None, author_login=None, author_name=None, authored_at=BASE_TIME, committed_at=BASE_TIME)],
-        ci=PullRequestCi(
-            state=ci_state,
-            visibility=ci_visibility,
-            check_runs=[],
-            commit_statuses=[],
-            total_check_runs=0,
-            total_status_contexts=0,
-            passing_count=1 if ci_state == CiState.PASSING else 0,
-            failing_count=1 if ci_state == CiState.FAILING else 0,
-            pending_count=1 if ci_state == CiState.PENDING else 0,
-            neutral_count=0,
-            skipped_count=0,
-            warnings=[],
-            fetched_at=BASE_TIME,
-            completeness=CiCompleteness(
-                check_runs_complete=ci_visibility != CiVisibility.UNAVAILABLE,
-                commit_statuses_complete=ci_visibility == CiVisibility.COMPLETE,
-                check_run_pages_fetched=1,
-                commit_status_pages_fetched=1,
-                raw_status_record_count=0,
-                unique_status_context_count=0,
-                warnings=[],
-            ),
-            rate_limit=None,
-        ),
+        ci=ci,
+        ci_explanation=build_ci_explanation(ci),
         classification_summary=classification_summary,
         signals=signals or [],
         completeness=SnapshotCompleteness(
@@ -166,10 +186,21 @@ def analyzed_snapshot(
     manual_signals: list[ReviewSignal] | None = None,
     ci_state: CiState = CiState.PASSING,
     ci_visibility: CiVisibility = CiVisibility.COMPLETE,
+    check_runs: list[CheckRunRecord] | None = None,
+    commit_statuses: list[CommitStatusRecord] | None = None,
     files_complete: bool = True,
     commits_complete: bool = True,
 ) -> PullRequestSnapshot:
-    snapshot = base_snapshot(files, signals=manual_signals, ci_state=ci_state, ci_visibility=ci_visibility, files_complete=files_complete, commits_complete=commits_complete)
+    snapshot = base_snapshot(
+        files,
+        signals=manual_signals,
+        ci_state=ci_state,
+        ci_visibility=ci_visibility,
+        check_runs=check_runs,
+        commit_statuses=commit_statuses,
+        files_complete=files_complete,
+        commits_complete=commits_complete,
+    )
     if manual_signals is None:
         result = analyze_snapshot_signals(snapshot)
         snapshot = snapshot.model_copy(update={"signals": result.signals, "signal_summary": result.summary})
@@ -250,6 +281,46 @@ def test_ci_actions_and_suppression(ci_state: CiState, ci_visibility: CiVisibili
     if "action.investigate_ci_visibility" in actions:
         evidence = " ".join(actions["action.investigate_ci_visibility"].evidence)
         assert ci_visibility.value in evidence or ci_state.value in evidence
+
+
+def test_failing_ci_action_and_readiness_reference_specific_surface() -> None:
+    snapshot = analyzed_snapshot(
+        [changed_file("backend/app/main.py")],
+        check_runs=[
+            CheckRunRecord(
+                id=1,
+                name="Static checks & unit tests",
+                status="completed",
+                conclusion="success",
+                provider_name="GitHub Actions",
+                provider_slug="github-actions",
+                details_url="https://github.com/octocat/Hello-World/actions/runs/1/job/2",
+                started_at=BASE_TIME,
+                completed_at=BASE_TIME,
+            )
+        ],
+        commit_statuses=[
+            CommitStatusRecord(
+                id=2,
+                context="Vercel",
+                state="failure",
+                description="Authorization required to deploy.",
+                target_url="https://vercel.com/git/authorize?repo=octocat",
+                creator_login="vercel[bot]",
+                created_at=BASE_TIME,
+                updated_at=BASE_TIME,
+            )
+        ],
+    )
+
+    assert snapshot.merge_readiness.decision.value == "blocked"
+    assert "failed Vercel authorization/configuration check" in snapshot.merge_readiness.reasons[0].explanation
+    actions = actions_by_rule(snapshot)
+    evidence = " ".join(actions["action.inspect_failing_ci"].evidence)
+    assert "Vercel" in evidence
+    assert "Authorization required to deploy." in evidence
+    assert "https://vercel.com/git/authorize?repo=octocat" in evidence
+    assert "Passed CI item: GitHub Actions / Static checks & unit tests." in actions["action.inspect_failing_ci"].evidence
 
 
 def test_security_actions_are_distinct_and_sanitized() -> None:

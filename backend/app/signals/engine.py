@@ -238,7 +238,7 @@ def _detect_testing(files: list[ChangedFile], has_tests: bool, sensitive_files: 
 def _detect_ci(snapshot: PullRequestSnapshot, emit) -> None:
     ci = snapshot.ci
     if ci.state == CiState.FAILING:
-        emit("ci.failing", evidence=[_e(EvidenceKind.CI_STATE, "Normalized CI state is failing.", observed=ci.state.value)])
+        emit("ci.failing", evidence=_ci_failure_evidence(snapshot))
     if ci.state == CiState.PENDING:
         emit("ci.pending", evidence=[_e(EvidenceKind.CI_STATE, "Normalized CI state is pending.", observed=ci.state.value)])
     if ci.visibility == CiVisibility.UNAVAILABLE:
@@ -250,6 +250,30 @@ def _detect_ci(snapshot: PullRequestSnapshot, emit) -> None:
             emit("ci.partial_visibility", evidence=[_e(EvidenceKind.CI_VISIBILITY, "CI visibility is partial.", observed=ci.visibility.value)])
         if ci.state == CiState.UNKNOWN and (ci.check_runs or ci.commit_statuses):
             emit("ci.unknown_outcome", evidence=[_e(EvidenceKind.CI_STATE, "Observed CI records could not be classified reliably.", observed=ci.state.value)])
+
+
+def _ci_failure_evidence(snapshot: PullRequestSnapshot) -> list[SignalEvidence]:
+    explanation = snapshot.ci_explanation
+    evidence = [_e(EvidenceKind.CI_STATE, explanation.summary or "Normalized CI state is failing.", observed=snapshot.ci.state.value)]
+    for item in explanation.blocking_items[:MAX_EVIDENCE_ITEMS_PER_SIGNAL - 1]:
+        evidence.append(
+            _e(
+                EvidenceKind.CI_STATE,
+                f"Blocking CI item: {item.provider} / {item.name} ({item.category.value}).",
+                observed=item.normalized_state,
+                expected=item.source_type.value,
+            )
+        )
+        if item.details_url:
+            evidence.append(
+                _e(
+                    EvidenceKind.CI_STATE,
+                    f"Details URL: {item.details_url}",
+                    observed=item.details_url,
+                    expected="safe_https_url",
+                )
+            )
+    return evidence[:MAX_EVIDENCE_ITEMS_PER_SIGNAL]
 
 
 def _detect_dependencies(files: list[ChangedFile], emit) -> None:

@@ -45,6 +45,7 @@ from app.file_priority import calculate_file_priorities
 from app.readiness import calculate_merge_readiness
 from app.review_actions import build_review_actions
 from app.scoring import calculate_evidence_confidence, calculate_merge_risk
+from app.services.ci_explanation import build_ci_explanation
 from app.services.ci_state import aggregate_ci_state
 from app.services.file_classifier import classify_changed_files
 from app.signals.engine import analyze_snapshot_signals
@@ -211,6 +212,7 @@ class GitHubRestClient:
         files, classification_summary = classify_changed_files(files)
         commits = await self.list_pull_request_commits(reference)
         ci = await self.get_pull_request_ci(reference, metadata.head_sha)
+        ci_explanation = build_ci_explanation(ci)
         completeness = self._build_completeness(metadata, files, commits)
 
         snapshot = PullRequestSnapshot(
@@ -219,6 +221,7 @@ class GitHubRestClient:
             files=files,
             commits=commits,
             ci=ci,
+            ci_explanation=ci_explanation,
             classification_summary=classification_summary,
             completeness=completeness,
             fetched_at=datetime.now(UTC),

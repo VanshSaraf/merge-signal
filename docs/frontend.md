@@ -80,6 +80,8 @@ The current UI is a detailed snapshot report. It shows:
 
 - repository and PR metadata
 - readiness, risk, confidence, and CI status
+- compact CI surface intelligence with passing, failing, pending, and unknown counts
+- expandable CI surface details with safe direct links when GitHub exposes HTTPS provider URLs
 - summary metrics
 - merge-risk group and evidence-confidence score breakdowns
 - all ranked files with priority, kind, area, status, search, sorting, and a detail drawer

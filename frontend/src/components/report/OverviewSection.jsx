@@ -1,6 +1,7 @@
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
+import { safeHttpUrl } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { ScoreBreakdown } from "./ScoreBreakdown.jsx";
 
@@ -9,6 +10,7 @@ export function OverviewSection({ snapshot }) {
     <div className="report-section">
       <ReadinessStatement snapshot={snapshot} />
       <ReviewNext snapshot={snapshot} />
+      <CiSurfacePanel snapshot={snapshot} />
       <AssessmentRow snapshot={snapshot} />
       <MetricGrid snapshot={snapshot} />
       <div className="breakdown-grid">
@@ -40,10 +42,100 @@ function ReadinessStatement({ snapshot }) {
 function summarizeReason(reason, snapshot) {
   if (!reason) return "";
   const ruleId = reason.rule_id ?? "";
-  if (ruleId.includes("ci_failing") || snapshot.ci?.state === "failing") return "CI is failing";
+  if (ruleId.includes("ci_failing") || snapshot.ci?.state === "failing") return ciBlockerText(snapshot) ?? "CI is failing";
   if (ruleId.includes("merge_conflict")) return "a merge conflict is reported";
   if (reason.title) return reason.title.replace(/\.$/, "").toLowerCase();
   return ruleId.replace(/^readiness\.[^.]+\./, "").replaceAll("_", " ");
+}
+
+function ciBlockerText(snapshot) {
+  const blocker = snapshot.ci_explanation?.blocking_items?.[0];
+  if (!blocker) return null;
+  const provider = blocker.provider || blocker.name;
+  return `${provider} ${categoryLabel(blocker.category)} check is failing`;
+}
+
+function CiSurfacePanel({ snapshot }) {
+  const explanation = snapshot.ci_explanation;
+  if (!explanation) return null;
+
+  return (
+    <section className="ci-surface-panel" aria-label="CI surface summary">
+      <div className="ci-surface-panel__header">
+        <div>
+          <p className="eyebrow">CI surfaces</p>
+          <h2>{explanation.summary ?? "CI status was observed."}</h2>
+        </div>
+        <Badge tone={toneForLevel(explanation.overall_state)}>{titleCase(explanation.overall_state)}</Badge>
+      </div>
+      <div className="ci-surface-counts" aria-label="CI item counts">
+        <CiCount label="Passed" value={explanation.passing_count} tone="success" />
+        <CiCount label="Failed" value={explanation.failing_count} tone="danger" />
+        <CiCount label="Pending" value={explanation.pending_count} tone="warning" />
+        <CiCount label="Unknown" value={explanation.unknown_count} tone="neutral" />
+      </div>
+      {explanation.blocking_items?.length > 0 && (
+        <div className="ci-blockers">
+          {explanation.blocking_items.map((item) => (
+            <CiItem item={item} key={`${item.source_type}-${item.provider}-${item.name}`} />
+          ))}
+        </div>
+      )}
+      {explanation.surfaces?.length > 0 && (
+        <details className="ci-surface-details">
+          <summary>View CI surface details</summary>
+          <div className="ci-surface-groups">
+            {explanation.surfaces.map((surface) => (
+              <div className="ci-surface-group" key={`${surface.source_type}-${surface.provider}`}>
+                <div className="ci-surface-group__heading">
+                  <strong>{surface.provider}</strong>
+                  <span>{titleCase(surface.source_type.replaceAll("_", " "))}</span>
+                </div>
+                <div className="ci-surface-items">
+                  {surface.items.map((item) => (
+                    <CiItem item={item} key={`${item.source_type}-${item.provider}-${item.name}-${item.normalized_state}`} compact />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+function CiCount({ label, value, tone }) {
+  return (
+    <div className={`ci-count ci-count--${tone}`}>
+      <strong>{value ?? 0}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function CiItem({ item, compact = false }) {
+  const url = safeHttpUrl(item.details_url);
+  return (
+    <article className={compact ? "ci-item ci-item--compact" : "ci-item"}>
+      <div>
+        <strong>{item.provider}</strong>
+        <span>{item.name}</span>
+      </div>
+      <div className="ci-item__meta">
+        <Badge tone={toneForLevel(item.normalized_state)}>{titleCase(item.normalized_state)}</Badge>
+        <Badge>{categoryLabel(item.category)}</Badge>
+        {url && <a href={url} target="_blank" rel="noreferrer">Open details</a>}
+      </div>
+      {!compact && item.description && <p>{item.description}</p>}
+    </article>
+  );
+}
+
+function categoryLabel(category) {
+  if (category === "authorization_or_configuration") return "authorization/configuration";
+  if (category === "typecheck") return "typecheck";
+  return titleCase(String(category ?? "unknown").replaceAll("_", " "));
 }
 
 function AssessmentRow({ snapshot }) {

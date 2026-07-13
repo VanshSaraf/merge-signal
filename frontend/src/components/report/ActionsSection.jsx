@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge } from "../common/Badge.jsx";
 import { Card } from "../common/Card.jsx";
 import { titleCase } from "../../utils/formatting.js";
-import { optionValues } from "../../utils/report.js";
+import { extractSafeUrl, optionValues } from "../../utils/report.js";
 import { toneForLevel } from "../../utils/status.js";
 import { FilterBar, SelectFilter, TextFilter } from "./FilterBar.jsx";
 
@@ -73,5 +73,17 @@ function ActionRow({ action, expanded, onToggle }) {
 
 function SmallList({ title, items }) {
   if (!items.length) return null;
-  return <div className="mini-list"><strong>{title}</strong><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
+  return <div className="mini-list"><strong>{title}</strong><ul>{items.map((item) => <li key={item}><EvidenceText text={item} /></li>)}</ul></div>;
+}
+
+function EvidenceText({ text }) {
+  const url = extractSafeUrl(text);
+  if (!url) return text;
+  const [before] = String(text).split(url);
+  return (
+    <>
+      {before.replace(/Details URL:\s*$/, "Details: ")}
+      <a href={url} target="_blank" rel="noreferrer">Open details</a>
+    </>
+  );
 }

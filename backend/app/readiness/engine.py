@@ -4,6 +4,7 @@ from app.domain.review_signal import ReviewSignal
 from app.domain.scoring import ConfidenceComponentStatus, EvidenceConfidenceLevel, MergeRiskLevel
 from app.readiness.ordering import DECISION_BY_EFFECT, EFFECT_PRECEDENCE, unique_sorted
 from app.readiness.rules import READINESS_RULES_VERSION, READY_BASELINE_RULE_ID, RULE_BY_ID, ReadinessRule
+from app.services.ci_explanation import primary_blocker_phrase
 
 READINESS_LIMITATIONS = [
     "A readiness decision is a deterministic heuristic, not proof of correctness.",
@@ -51,7 +52,7 @@ def _evaluate_reasons(
     if "metadata.merge_conflict_observed" in signals_by_rule:
         reasons.append(_signal_reason("readiness.blocked.merge_conflict", signals_by_rule["metadata.merge_conflict_observed"], "merge_conflict_observed"))
     if snapshot.ci.state == CiState.FAILING or "ci.failing" in signals_by_rule:
-        reasons.append(_signal_reason("readiness.blocked.ci_failing", signals_by_rule.get("ci.failing", []), snapshot.ci.state.value))
+        reasons.append(_ci_failing_reason(snapshot, signals_by_rule.get("ci.failing", [])))
 
     if snapshot.metadata.draft or "metadata.draft_pull_request" in signals_by_rule:
         reasons.append(_signal_reason("readiness.not_ready.draft", signals_by_rule.get("metadata.draft_pull_request", []), str(snapshot.metadata.draft).lower()))
@@ -125,6 +126,20 @@ def _signal_reason(rule_id: str, signals: list[ReviewSignal], observed_value: st
         rule_id,
         observed_value=observed_value,
         explanation=_signal_explanation(rule_id, observed_value),
+        related_signal_ids=[signal.id for signal in signals],
+        affected_files=[file for signal in signals for file in signal.affected_files],
+    )
+
+
+def _ci_failing_reason(snapshot: PullRequestSnapshot, signals: list[ReviewSignal]) -> DecisionReason:
+    blocker = primary_blocker_phrase(snapshot.ci_explanation)
+    explanation = snapshot.ci_explanation.summary if snapshot.ci_explanation.total_count else _signal_explanation("readiness.blocked.ci_failing", snapshot.ci.state.value)
+    if blocker:
+        explanation = f"Blocked by {blocker}. {snapshot.ci_explanation.summary}"
+    return _reason(
+        "readiness.blocked.ci_failing",
+        observed_value=snapshot.ci.state.value,
+        explanation=explanation,
         related_signal_ids=[signal.id for signal in signals],
         affected_files=[file for signal in signals for file in signal.affected_files],
     )

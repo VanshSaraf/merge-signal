@@ -101,7 +101,7 @@ def _ci_actions(
                 "action.inspect_failing_ci",
                 signals_by_rule.get("ci.failing", []),
                 reasons_by_rule.get("readiness.blocked.ci_failing", []),
-                [f"Observed CI state: {snapshot.ci.state.value}.", "MergeSignal does not infer which checks are required."],
+                _ci_failure_action_evidence(snapshot),
                 ranked_positions,
             )
         )
@@ -137,6 +137,31 @@ def _ci_actions(
             )
         )
     return actions
+
+
+def _ci_failure_action_evidence(snapshot: PullRequestSnapshot) -> list[str]:
+    explanation = snapshot.ci_explanation
+    if not explanation.total_count:
+        return [f"Observed CI state: {snapshot.ci.state.value}.", "MergeSignal does not infer which checks are required."]
+    evidence = [
+        explanation.summary,
+        "MergeSignal does not infer which checks are required.",
+    ]
+    for item in explanation.blocking_items[:3]:
+        evidence.append(f"Blocking CI item: {item.provider} / {item.name} ({item.category.value}, {item.normalized_state}).")
+        if item.description:
+            evidence.append(f"Provider detail: {item.description}")
+        if item.details_url:
+            evidence.append(f"Details URL: {item.details_url}")
+    passed = [
+        item
+        for surface in explanation.surfaces
+        for item in surface.items
+        if item.normalized_state == "passing"
+    ][:3]
+    for item in passed:
+        evidence.append(f"Passed CI item: {item.provider} / {item.name}.")
+    return evidence
 
 
 def _security_actions(

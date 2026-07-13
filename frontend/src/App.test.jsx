@@ -54,6 +54,55 @@ function snapshotResponse(overrides = {}) {
       },
     ],
     ci: { state: "passing", visibility: "complete" },
+    ci_explanation: {
+      overall_state: "passing",
+      visibility: "complete",
+      summary: "2 checks passed.",
+      total_count: 2,
+      passing_count: 2,
+      failing_count: 0,
+      pending_count: 0,
+      neutral_count: 0,
+      skipped_count: 0,
+      unknown_count: 0,
+      blocking_items: [],
+      warnings: [],
+      surfaces: [
+        {
+          provider: "GitHub Actions",
+          source_type: "check_run",
+          total_count: 2,
+          passing_count: 2,
+          failing_count: 0,
+          pending_count: 0,
+          neutral_count: 0,
+          skipped_count: 0,
+          unknown_count: 0,
+          items: [
+            {
+              name: "Static checks & unit tests",
+              provider: "GitHub Actions",
+              source_type: "check_run",
+              normalized_state: "passing",
+              category: "test",
+              description: "success",
+              details_url: "https://github.com/octocat/Hello-World/actions/runs/1/job/2",
+              is_blocking: false,
+            },
+            {
+              name: "End-to-end tests",
+              provider: "GitHub Actions",
+              source_type: "check_run",
+              normalized_state: "passing",
+              category: "test",
+              description: "success",
+              details_url: "https://github.com/octocat/Hello-World/actions/runs/1/job/3",
+              is_blocking: false,
+            },
+          ],
+        },
+      ],
+    },
     signal_summary: { total_signals: 2 },
     signals: [
       {
@@ -377,6 +426,120 @@ describe("App", () => {
     expect(additionalLimitations).not.toBeNull();
     expect(additionalLimitations).not.toHaveAttribute("open");
     expect(within(additionalLimitations).getByText(/Human review remains necessary/i)).toBeInTheDocument();
+  });
+
+  it("renders actionable CI surface intelligence for a blocked deployment status", async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn((url) => {
+      if (String(url).endsWith("/health")) {
+        return healthResponse();
+      }
+      return okSnapshot(snapshotResponse({
+        ci: { state: "failing", visibility: "complete" },
+        ci_explanation: {
+          overall_state: "failing",
+          visibility: "complete",
+          summary: "1 authorization/configuration check failing on Vercel; 2 checks passed.",
+          total_count: 3,
+          passing_count: 2,
+          failing_count: 1,
+          pending_count: 0,
+          neutral_count: 0,
+          skipped_count: 0,
+          unknown_count: 0,
+          warnings: [],
+          blocking_items: [
+            {
+              name: "Vercel",
+              provider: "Vercel",
+              source_type: "commit_status",
+              normalized_state: "failing",
+              category: "authorization_or_configuration",
+              description: "Authorization required to deploy.",
+              details_url: "https://vercel.com/git/authorize?repo=octocat",
+              is_blocking: true,
+            },
+          ],
+          surfaces: [
+            {
+              provider: "GitHub Actions",
+              source_type: "check_run",
+              total_count: 2,
+              passing_count: 2,
+              failing_count: 0,
+              pending_count: 0,
+              neutral_count: 0,
+              skipped_count: 0,
+              unknown_count: 0,
+              items: [
+                { name: "End-to-end tests", provider: "GitHub Actions", source_type: "check_run", normalized_state: "passing", category: "test", description: "success", details_url: "https://github.com/octocat/Hello-World/actions/runs/1/job/3", is_blocking: false },
+                { name: "Static checks & unit tests", provider: "GitHub Actions", source_type: "check_run", normalized_state: "passing", category: "test", description: "success", details_url: "https://github.com/octocat/Hello-World/actions/runs/1/job/2", is_blocking: false },
+              ],
+            },
+            {
+              provider: "Vercel",
+              source_type: "commit_status",
+              total_count: 1,
+              passing_count: 0,
+              failing_count: 1,
+              pending_count: 0,
+              neutral_count: 0,
+              skipped_count: 0,
+              unknown_count: 0,
+              items: [
+                { name: "Vercel", provider: "Vercel", source_type: "commit_status", normalized_state: "failing", category: "authorization_or_configuration", description: "Authorization required to deploy.", details_url: "https://vercel.com/git/authorize?repo=octocat", is_blocking: true },
+              ],
+            },
+          ],
+        },
+        merge_readiness: {
+          decision: "blocked",
+          decisive_rule_id: "readiness.blocked.ci_failing",
+          reasons: [
+            {
+              rule_id: "readiness.blocked.ci_failing",
+              title: "CI is failing",
+              effect: "block",
+              explanation: "Blocked by a failed Vercel authorization/configuration check. 1 authorization/configuration check failing on Vercel; 2 checks passed.",
+            },
+          ],
+          limitations: [],
+        },
+        review_actions: [
+          {
+            id: "action.inspect_failing_ci",
+            rule_id: "action.inspect_failing_ci",
+            title: "Inspect failing CI",
+            description: "Open the failing CI surface and inspect the provider evidence before reassessing readiness.",
+            priority: "high",
+            category: "ci",
+            affected_files: [],
+            related_signal_ids: ["ci.failing:fixture"],
+            related_readiness_rule_ids: ["readiness.blocked.ci_failing"],
+            evidence: ["Details URL: https://vercel.com/git/authorize?repo=octocat"],
+            limitations: [],
+          },
+        ],
+        review_action_summary: { total_actions: 1, limitations: [] },
+      }));
+    });
+    renderApp();
+
+    await user.type(screen.getByLabelText("GitHub PR URL"), validUrl);
+    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+
+    expect(await screen.findByRole("heading", { name: /Blocked because Vercel authorization\/configuration check is failing/i })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "CI surface summary" })).toHaveTextContent("2 checks passed");
+    expect(screen.getByText("Authorization required to deploy.")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
+
+    await user.click(screen.getByText("View CI surface details"));
+    expect(screen.getByText("Static checks & unit tests")).toBeInTheDocument();
+    expect(screen.getByText("End-to-end tests")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Actions" }));
+    await user.click(screen.getByRole("button", { name: "View details" }));
+    expect(screen.getAllByRole("link", { name: "Open details" }).some((link) => link.getAttribute("href") === "https://vercel.com/git/authorize?repo=octocat")).toBe(true);
   });
 
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {

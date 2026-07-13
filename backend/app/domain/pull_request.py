@@ -314,6 +314,23 @@ class CiVisibility(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class CiSurfaceType(StrEnum):
+    CHECK_RUN = "check_run"
+    COMMIT_STATUS = "commit_status"
+
+
+class CiSurfaceCategory(StrEnum):
+    TEST = "test"
+    BUILD = "build"
+    LINT = "lint"
+    TYPECHECK = "typecheck"
+    DEPLOYMENT = "deployment"
+    AUTHORIZATION_OR_CONFIGURATION = "authorization_or_configuration"
+    SECURITY = "security"
+    QUALITY = "quality"
+    UNKNOWN = "unknown"
+
+
 class CheckRunRecord(StrictDomainModel):
     id: int = Field(description="GitHub check-run identifier.")
     name: str = Field(description="Check-run name.")
@@ -365,6 +382,64 @@ class PullRequestCi(StrictDomainModel):
     rate_limit: GitHubRateLimit | None = Field(description="Latest CI rate-limit metadata when available.")
 
 
+class CiExplanationItem(StrictDomainModel):
+    name: str = Field(description="Observed check-run name or commit-status context.")
+    provider: str = Field(description="Normalized provider or source label.")
+    source_type: CiSurfaceType = Field(description="GitHub CI surface that produced this item.")
+    normalized_state: str = Field(description="Normalized item state.")
+    category: CiSurfaceCategory = Field(description="Best-effort deterministic CI surface category.")
+    description: str | None = Field(description="Provider-supplied safe description when available.")
+    details_url: str | None = Field(description="Safe HTTPS details URL when available.")
+    is_blocking: bool = Field(description="Whether this item currently blocks readiness through a failing state.")
+
+
+class CiSurfaceSummary(StrictDomainModel):
+    provider: str = Field(description="Provider label for this CI surface group.")
+    source_type: CiSurfaceType = Field(description="GitHub CI surface represented by this group.")
+    total_count: int = Field(description="Total items in this group.")
+    passing_count: int = Field(description="Passing items in this group.")
+    failing_count: int = Field(description="Failing items in this group.")
+    pending_count: int = Field(description="Pending items in this group.")
+    neutral_count: int = Field(description="Neutral items in this group.")
+    skipped_count: int = Field(description="Skipped items in this group.")
+    unknown_count: int = Field(description="Unknown items in this group.")
+    items: list[CiExplanationItem] = Field(description="CI items in deterministic display order.")
+
+
+class CiExplanation(StrictDomainModel):
+    overall_state: CiState = Field(description="Aggregated observed CI state.")
+    visibility: CiVisibility = Field(description="CI visibility completeness.")
+    summary: str = Field(description="Short human-readable CI explanation.")
+    total_count: int = Field(description="Total observed CI items.")
+    passing_count: int = Field(description="Observed passing items.")
+    failing_count: int = Field(description="Observed failing items.")
+    pending_count: int = Field(description="Observed pending items.")
+    neutral_count: int = Field(description="Observed neutral items.")
+    skipped_count: int = Field(description="Observed skipped items.")
+    unknown_count: int = Field(description="Observed unknown items.")
+    surfaces: list[CiSurfaceSummary] = Field(description="Observed CI surfaces grouped by provider and source.")
+    blocking_items: list[CiExplanationItem] = Field(description="Failing items that block merge readiness.")
+    warnings: list[str] = Field(description="CI explanation warnings.")
+
+
+def empty_ci_explanation() -> CiExplanation:
+    return CiExplanation(
+        overall_state=CiState.MISSING,
+        visibility=CiVisibility.COMPLETE,
+        summary="No CI checks were visible for the current head SHA.",
+        total_count=0,
+        passing_count=0,
+        failing_count=0,
+        pending_count=0,
+        neutral_count=0,
+        skipped_count=0,
+        unknown_count=0,
+        surfaces=[],
+        blocking_items=[],
+        warnings=[],
+    )
+
+
 class SnapshotCompleteness(StrictDomainModel):
     files_complete: bool = Field(description="Whether changed-file retrieval is complete.")
     commits_complete: bool = Field(description="Whether commit retrieval is complete.")
@@ -378,6 +453,10 @@ class PullRequestSnapshot(StrictDomainModel):
     files: list[ChangedFile] = Field(description="Changed files in GitHub order.")
     commits: list[PullRequestCommit] = Field(description="Commits in GitHub order.")
     ci: PullRequestCi = Field(description="Read-only CI visibility for the pull-request head SHA.")
+    ci_explanation: CiExplanation = Field(
+        default_factory=empty_ci_explanation,
+        description="Structured explanation of observed CI surfaces and blocking items.",
+    )
     classification_summary: FileClassificationSummary = Field(
         description="Pull-request-level summary of changed-file classifications."
     )

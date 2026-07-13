@@ -39,6 +39,7 @@ HTTP request
 -> commit retrieval
 -> current head SHA from pull-request metadata
 -> check-run and commit-status retrieval for that head SHA
+-> structured CI explanation for observed surfaces
 -> deterministic review-signal engine
 -> signal aggregation and summary generation
 -> merge-risk engine
@@ -127,7 +128,7 @@ GitHub-specific transport models live under `app/integrations/github/models.py` 
 
 CI retrieval uses only `metadata.head_sha`. Check runs are fetched from the commit check-runs endpoint and commit statuses from the commit statuses endpoint. The route layer does not pass arbitrary refs to CI retrieval.
 
-The CI aggregation service lives outside FastAPI. It reduces check-run outcomes and current commit-status contexts into state and visibility values without making merge-readiness claims. Partial CI-only failures can produce a successful snapshot with warnings, while authentication and rate-limit failures remain global errors.
+The CI aggregation service lives outside FastAPI. It reduces check-run outcomes and current commit-status contexts into state and visibility values without making merge-readiness claims. A separate CI explanation service converts those already-fetched records into grouped surfaces, item-level normalized states, deterministic categories, blocking items, and safe HTTPS details links. Partial CI-only failures can produce a successful snapshot with warnings, while authentication and rate-limit failures remain global errors.
 
 Pagination is centralized in `app/integrations/github/pagination.py`. Only safe `rel="next"` links on the configured API host are followed, repeated links are rejected, and `GITHUB_MAX_PAGES` bounds the flow.
 

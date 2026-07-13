@@ -68,3 +68,19 @@ export function cleanEvidence(evidence) {
 export function dedupe(values) {
   return [...new Set((values ?? []).filter(Boolean))];
 }
+
+export function safeHttpUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function extractSafeUrl(text) {
+  const match = String(text ?? "").match(/https:\/\/[^\s)]+/);
+  return match ? safeHttpUrl(match[0]) : null;
+}

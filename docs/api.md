@@ -192,6 +192,21 @@ Compact success response:
         "reset_at": "2026-07-03T11:00:00Z"
       }
     },
+    "ci_explanation": {
+      "overall_state": "missing",
+      "visibility": "complete",
+      "summary": "No CI checks were visible for the current head SHA.",
+      "total_count": 0,
+      "passing_count": 0,
+      "failing_count": 0,
+      "pending_count": 0,
+      "neutral_count": 0,
+      "skipped_count": 0,
+      "unknown_count": 0,
+      "surfaces": [],
+      "blocking_items": [],
+      "warnings": []
+    },
     "classification_summary": {
       "total_files": 1,
       "classified_files": 1,
@@ -370,6 +385,14 @@ Compact success response:
   }
 }
 ```
+
+### CI explanation
+
+`ci` is the normalized aggregate state. `ci_explanation` is an additive display-oriented structure that explains the observed check-run and commit-status surfaces without inferring repository policy.
+
+Each `ci_explanation.surfaces[]` entry groups items by provider and GitHub surface (`check_run` or `commit_status`). Each item includes a normalized state, provider, source type, category, optional safe HTTPS details URL, and `is_blocking` when the item is currently failing. Categories are deterministic best-effort labels: `test`, `build`, `lint`, `typecheck`, `deployment`, `authorization_or_configuration`, `security`, `quality`, and `unknown`.
+
+When CI is failing, `blocking_items` identifies the exact observed failing surface when available. For example, a Vercel commit status with description `Authorization required to deploy.` is categorized as `authorization_or_configuration`, while passing GitHub Actions check runs remain visible as passed items in their own surface group.
 
 Example:
 

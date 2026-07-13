@@ -2,27 +2,24 @@ import { Badge } from "../common/Badge.jsx";
 import { titleCase } from "../../utils/formatting.js";
 import { toneForLevel } from "../../utils/status.js";
 
-export function AssessmentRail({ snapshot }) {
-  const items = assessmentItems(snapshot);
+export function ReviewFocusPanel({ snapshot }) {
+  const items = reviewFocusItems(snapshot);
+
+  if (!items.length) {
+    return null;
+  }
 
   return (
-    <aside className="assessment-rail" aria-label="Assessment summary">
+    <aside className="review-focus-panel" aria-label="Review focus">
       <div className="rail-heading">
-        <p className="eyebrow">Assessment</p>
-        <h2>Merge signal</h2>
+        <p className="eyebrow">Review focus</p>
+        <h2>What to inspect first</h2>
       </div>
       {items.map((item) => (
-        <article className="rail-metric" key={item.label}>
-          <div>
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-          </div>
-          <Badge tone={item.tone}>{item.detail}</Badge>
-          {item.meter != null && (
-            <div className="rail-meter" aria-label={`${item.label} ${item.meter} of 100`}>
-              <span style={{ width: `${Math.min(100, Math.max(0, item.meter))}%` }} />
-            </div>
-          )}
+        <article className="focus-item" key={item.label}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+          {item.detail && <p>{item.detail}</p>}
         </article>
       ))}
     </aside>
@@ -71,6 +68,48 @@ function assessmentItems(snapshot) {
       tone: toneForLevel(snapshot.ci?.state),
     },
   ];
+}
+
+function reviewFocusItems(snapshot) {
+  const items = [];
+  const primaryReason = snapshot.merge_readiness?.reasons?.[0];
+  const topFile = snapshot.ranked_files?.[0];
+  const firstAction = snapshot.review_actions?.[0];
+  const confidence = snapshot.evidence_confidence;
+
+  if (primaryReason?.title) {
+    items.push({
+      label: "Decisive reason",
+      value: primaryReason.title,
+      detail: primaryReason.explanation,
+    });
+  }
+
+  if (topFile?.path) {
+    items.push({
+      label: "Highest-priority file",
+      value: topFile.path,
+      detail: `${titleCase(topFile.level)} priority · ${titleCase(topFile.primary_kind)}`,
+    });
+  }
+
+  if (firstAction?.title) {
+    items.push({
+      label: "First reviewer action",
+      value: firstAction.title,
+      detail: firstAction.description,
+    });
+  }
+
+  if (confidence && confidence.level !== "high") {
+    items.push({
+      label: "Evidence quality",
+      value: `${confidence.score ?? 0}/100 · ${titleCase(confidence.level)}`,
+      detail: "Evidence confidence is materially incomplete; read limitations before merging.",
+    });
+  }
+
+  return items.slice(0, 4);
 }
 
 function toneForConfidence(level) {

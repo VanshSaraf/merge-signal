@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -316,10 +316,20 @@ describe("App", () => {
 
     expect(await screen.findByText("octocat/Hello-World")).toBeInTheDocument();
     expect(screen.getByText("Improve merge signal collection")).toBeInTheDocument();
-    expect(screen.getByLabelText("Assessment summary")).toBeInTheDocument();
+    expect(screen.getByLabelText("Analyze another pull request")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
+    expect(await screen.findAllByText("Backend online")).toHaveLength(1);
+    expect(screen.getByLabelText("Review focus")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Assessment summary")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Review focus")).toHaveTextContent("Patch visibility is partial");
+    expect(screen.getByLabelText("Review focus")).toHaveTextContent("backend/app/security/secrets.py");
     expect(screen.getAllByText("Ready With Caution").length).toBeGreaterThan(0);
     expect(screen.getAllByText("42/100").length).toBeGreaterThan(0);
     expect(screen.getAllByText("86/100").length).toBeGreaterThan(0);
+    expect(screen.getByText("Review next")).toBeInTheDocument();
+    expect(screen.getAllByText("Verify credential-like literal").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Start with backend\/app\/security\/secrets.py/i)).toBeInTheDocument();
+    expect(screen.queryByText("readiness.caution.patch_visibility_partial")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Files" }));
     expect(screen.queryByLabelText("Assessment summary")).not.toBeInTheDocument();
@@ -359,8 +369,14 @@ describe("App", () => {
     expect(screen.getByText("Risk contributions")).toBeInTheDocument();
     expect(screen.getByText("Classification summary")).toBeInTheDocument();
     expect(screen.getAllByText("Analysis boundaries").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Does not execute or semantically prove code behavior/i)).toBeInTheDocument();
     expect(screen.getByText("Score boundaries")).toBeInTheDocument();
+    expect(screen.getByText(/not probabilities or proof of safety/i)).toBeInTheDocument();
     expect(screen.getByText("Human review")).toBeInTheDocument();
+    const additionalLimitations = screen.getByText("Additional source limitations").closest("details");
+    expect(additionalLimitations).not.toBeNull();
+    expect(additionalLimitations).not.toHaveAttribute("open");
+    expect(within(additionalLimitations).getByText(/Human review remains necessary/i)).toBeInTheDocument();
   });
 
   it("renders all ranked files with search, filters, sorting, clear filters, and details", async () => {
@@ -534,9 +550,12 @@ describe("App", () => {
 
     await user.clear(screen.getByLabelText("GitHub PR URL"));
     await user.type(screen.getByLabelText("GitHub PR URL"), secondUrl);
-    await user.click(screen.getByRole("button", { name: "Analyze pull request" }));
+    await user.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByText("Plain frontend cleanup")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(screen.getByLabelText("Review focus")).toHaveTextContent("frontend/src/App.jsx");
+    expect(screen.getByLabelText("Review focus")).not.toHaveTextContent("backend/app/security/secrets.py");
     await user.click(screen.getByRole("tab", { name: "Actions" }));
     await waitFor(() => {
       expect(screen.queryByText("Verify credential-like literal")).not.toBeInTheDocument();

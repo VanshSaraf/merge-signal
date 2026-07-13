@@ -8,9 +8,9 @@ export function OverviewSection({ snapshot }) {
   return (
     <div className="report-section">
       <ReadinessStatement snapshot={snapshot} />
+      <ReviewNext snapshot={snapshot} />
       <AssessmentRow snapshot={snapshot} />
       <MetricGrid snapshot={snapshot} />
-      <KeyEvidence snapshot={snapshot} />
       <div className="breakdown-grid">
         <Card title="Merge-risk groups" eyebrow="Not a probability">
           <ScoreBreakdown title="Risk group breakdown" items={snapshot.merge_risk?.group_scores ?? []} />
@@ -49,7 +49,7 @@ function summarizeReason(reason, snapshot) {
 function AssessmentRow({ snapshot }) {
   return (
     <section className="assessment-row" aria-label="Primary assessment">
-      <AssessmentTile label="Readiness" value={titleCase(snapshot.merge_readiness?.decision)} tone={toneForLevel(snapshot.merge_readiness?.decision)} detail={snapshot.merge_readiness?.decisive_rule_id} />
+      <AssessmentTile label="Readiness" value={titleCase(snapshot.merge_readiness?.decision)} tone={toneForLevel(snapshot.merge_readiness?.decision)} detail="Current verdict" />
       <AssessmentTile label="Merge risk" value={`${snapshot.merge_risk?.score ?? 0}/100`} tone={toneForLevel(snapshot.merge_risk?.level)} detail={titleCase(snapshot.merge_risk?.level)} meter={snapshot.merge_risk?.score ?? 0} />
       <AssessmentTile label="Evidence confidence" value={`${snapshot.evidence_confidence?.score ?? 0}/100`} tone={toneForConfidence(snapshot.evidence_confidence?.level)} detail={titleCase(snapshot.evidence_confidence?.level)} meter={snapshot.evidence_confidence?.score ?? 0} />
       <AssessmentTile label="CI" value={titleCase(snapshot.ci?.state)} tone={toneForLevel(snapshot.ci?.state)} detail={`Visibility: ${titleCase(snapshot.ci?.visibility)}`} />
@@ -74,6 +74,47 @@ function AssessmentTile({ label, value, tone, detail, meter }) {
   );
 }
 
+function ReviewNext({ snapshot }) {
+  const items = reviewNextItems(snapshot);
+
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <section className="review-next" aria-labelledby="review-next-heading">
+      <div>
+        <p className="eyebrow">Review next</p>
+        <h2 id="review-next-heading">Start with the evidence that can change merge readiness.</h2>
+      </div>
+      <ol>
+        {items.map((item) => (
+          <li key={item.label}>
+            <strong>{item.label}</strong>
+            {item.detail && <span>{item.detail}</span>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function reviewNextItems(snapshot) {
+  const actions = (snapshot.review_actions ?? []).slice(0, 2).map((action) => ({
+    label: action.title,
+    detail: action.description,
+  }));
+  const topFile = snapshot.ranked_files?.[0];
+  const fileItem = topFile?.path
+    ? [{
+        label: `Start with ${topFile.path}`,
+        detail: `${titleCase(topFile.level)} priority changed file`,
+      }]
+    : [];
+
+  return [...actions, ...fileItem].slice(0, 3);
+}
+
 function MetricGrid({ snapshot }) {
   const metrics = [
     ["Changed files", snapshot.metadata?.changed_files],
@@ -86,27 +127,6 @@ function MetricGrid({ snapshot }) {
   return (
     <section className="metric-grid" aria-label="Snapshot metrics">
       {metrics.map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{formatNumber(value)}</strong></div>)}
-    </section>
-  );
-}
-
-function KeyEvidence({ snapshot }) {
-  const limitations = [
-    ...(snapshot.merge_readiness?.limitations ?? []),
-    ...(snapshot.merge_risk?.limitations ?? []),
-    ...(snapshot.evidence_confidence?.limitations ?? []),
-  ];
-
-  return (
-    <section className="overview-evidence" aria-label="Key evidence and limitations">
-      <div>
-        <p className="eyebrow">Decisive rule</p>
-        <code>{snapshot.merge_readiness?.decisive_rule_id ?? "none"}</code>
-      </div>
-      <div>
-        <p className="eyebrow">Key limitations</p>
-        <p>{limitations.slice(0, 2).join(" ") || "No limitations returned for the current snapshot."}</p>
-      </div>
     </section>
   );
 }

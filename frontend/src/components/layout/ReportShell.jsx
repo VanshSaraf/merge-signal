@@ -1,7 +1,7 @@
 import { Badge } from "../common/Badge.jsx";
 import { formatNumber, titleCase } from "../../utils/formatting.js";
 import { toneForLevel } from "../../utils/status.js";
-import { AssessmentRail, AssessmentSummaryStrip } from "../report/AssessmentRail.jsx";
+import { AssessmentSummaryStrip, ReviewFocusPanel } from "../report/AssessmentRail.jsx";
 import { ReportNavigation } from "../report/ReportNavigation.jsx";
 
 export function ReportShell({ snapshot, activeSection, onSectionChange, children }) {
@@ -48,7 +48,7 @@ export function ReportShell({ snapshot, activeSection, onSectionChange, children
           {!isOverview && <AssessmentSummaryStrip snapshot={snapshot} />}
           {children}
         </div>
-        {isOverview && <AssessmentRail snapshot={snapshot} />}
+        {isOverview && <ReviewFocusPanel snapshot={snapshot} />}
       </div>
     </section>
   );

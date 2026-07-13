@@ -11,7 +11,7 @@ export function AnalysisCommand({ value, onChange, onSubmit, onCancel, isLoading
           <p className="eyebrow">{compact ? "Analyze another PR" : "Analyze a public pull request"}</p>
           <h2>{compact ? "Start with a new GitHub PR URL" : "Start with a GitHub PR URL"}</h2>
         </div>
-        <HealthStatus compact />
+        {!compact && <HealthStatus compact />}
       </div>
 
       <div className="form-row">
@@ -43,7 +43,7 @@ export function AnalysisCommand({ value, onChange, onSubmit, onCancel, isLoading
 
       <div className="form-actions">
         <button className="button button--primary" type="submit" disabled={isLoading}>
-          {isLoading ? "Analyzing..." : "Analyze pull request"}
+          {isLoading ? "Analyzing..." : compact ? "Analyze" : "Analyze pull request"}
         </button>
         {isLoading && (
           <button className="button button--secondary" type="button" onClick={onCancel}>

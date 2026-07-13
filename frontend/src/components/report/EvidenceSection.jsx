@@ -24,7 +24,11 @@ export function EvidenceSection({ snapshot }) {
           {(snapshot.merge_readiness?.reasons ?? []).map((reason) => (
             <article className="compact-evidence" key={reason.rule_id}>
               <Badge tone={toneForLevel(reason.effect)}>{titleCase(reason.effect)}</Badge>
-              <div><strong>{reason.title}</strong><p>{reason.explanation}</p><small>{reason.rule_id}</small></div>
+              <div>
+                <strong>{reason.title}</strong>
+                <p>{reason.explanation}</p>
+                <TechnicalDetail label="Readiness rule ID" value={reason.rule_id} />
+              </div>
             </article>
           ))}
         </div>
@@ -34,7 +38,12 @@ export function EvidenceSection({ snapshot }) {
           {(snapshot.merge_risk?.contributions ?? []).map((contribution) => (
             <article className="compact-evidence" key={contribution.signal_id}>
               <Badge tone={toneForLevel(contribution.severity)}>{titleCase(contribution.severity)}</Badge>
-              <div><strong>{contribution.title}</strong><p>{contribution.explanation}</p><small>{contribution.applied_points}/{contribution.raw_points} points · {contribution.rule_id}</small></div>
+              <div>
+                <strong>{contribution.title}</strong>
+                <p>{contribution.explanation}</p>
+                <small>{contribution.applied_points}/{contribution.raw_points} points</small>
+                <TechnicalDetail label="Risk contribution rule ID" value={contribution.rule_id} />
+              </div>
             </article>
           ))}
         </div>
@@ -64,28 +73,51 @@ export function EvidenceSection({ snapshot }) {
           <LimitationGroup
             title="Analysis boundaries"
             items={[
-              "MergeSignal uses deterministic GitHub-visible evidence from the current snapshot.",
-              "Human review remains necessary for intent, correctness, and product judgment.",
+              "Uses observable GitHub metadata, files, available patches, commits, and CI.",
+              "Does not execute or semantically prove code behavior.",
             ]}
           />
           <LimitationGroup
             title="Score boundaries"
             items={[
-              "Merge risk is a heuristic score, not a probability.",
-              "Evidence confidence measures visibility and completeness, not code quality.",
+              "Risk and confidence are deterministic heuristics, not probabilities or proof of safety.",
             ]}
           />
           <LimitationGroup
             title="Human review"
             items={[
-              "Review actions are prompts for verification, not automated fixes.",
-              "Low-priority files must still be considered when reviewing the PR.",
+              "Review actions are verification prompts.",
+              "Final correctness and merge judgment remain human responsibilities.",
             ]}
           />
-          {limitations.length > 0 && <LimitationGroup title="Source limitations" items={limitations} compact />}
+          {limitations.length > 0 && <AdditionalLimitations items={limitations} />}
         </div>
       </Card>
     </div>
+  );
+}
+
+function TechnicalDetail({ label, value }) {
+  if (!value) return null;
+  return (
+    <details className="technical-provenance">
+      <summary>Technical provenance</summary>
+      <div>
+        <span>{label}</span>
+        <code>{value}</code>
+      </div>
+    </details>
+  );
+}
+
+function AdditionalLimitations({ items }) {
+  return (
+    <details className="additional-limitations">
+      <summary>Additional source limitations</summary>
+      <ul className="limitation-list">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </details>
   );
 }
 

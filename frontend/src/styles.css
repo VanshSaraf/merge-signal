@@ -436,8 +436,9 @@ main {
 
 .analysis-command--compact {
   align-items: end;
-  grid-template-columns: minmax(220px, 0.7fr) minmax(360px, 1fr) auto;
-  padding: var(--space-4);
+  gap: var(--space-3);
+  grid-template-columns: minmax(160px, 0.36fr) minmax(320px, 1fr) auto;
+  padding: var(--space-3);
 }
 
 .analysis-command--compact .analysis-command__header {
@@ -445,7 +446,24 @@ main {
 }
 
 .analysis-command--compact h2 {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
+}
+
+.analysis-command--compact .input-label,
+.analysis-command--compact .input-help {
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+.analysis-command--compact .form-actions {
+  align-self: center;
+}
+
+.analysis-command--compact .button {
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .form-row,
@@ -842,7 +860,7 @@ input:disabled {
 .report-shell {
   box-shadow: var(--shadow);
   display: grid;
-  overflow: clip;
+  overflow: visible;
   position: relative;
 }
 
@@ -859,6 +877,10 @@ input:disabled {
 
 .report-entry-bar {
   display: grid;
+}
+
+.report-entry-bar .analysis-command {
+  box-shadow: none;
 }
 
 .pull-header__main {
@@ -927,7 +949,7 @@ input:disabled {
 .metric span,
 .assessment-tile span,
 .detail-grid dt,
-.rail-metric span {
+.focus-item span {
   color: var(--text-3);
   font-size: 0.7rem;
   font-weight: 850;
@@ -946,7 +968,7 @@ input:disabled {
 }
 
 .report-console--overview {
-  grid-template-columns: 178px minmax(0, 1fr) 260px;
+  grid-template-columns: 178px minmax(0, 1fr) minmax(260px, 300px);
 }
 
 .report-console--compact {
@@ -957,7 +979,7 @@ input:disabled {
   background: var(--surface-2);
   border-right: 1px solid var(--border);
   position: sticky;
-  top: 60px;
+  top: 61px;
   z-index: 6;
 }
 
@@ -1002,8 +1024,9 @@ input:disabled {
 
 .assessment-strip {
   align-items: center;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.06);
   color: var(--text-2);
   display: flex;
   flex-wrap: wrap;
@@ -1014,11 +1037,11 @@ input:disabled {
   min-height: 48px;
   padding: var(--space-2) var(--space-4);
   position: sticky;
-  top: 60px;
+  top: 61px;
   z-index: 5;
 }
 
-.assessment-rail {
+.review-focus-panel {
   background: var(--surface-2);
   border-left: 1px solid var(--border);
   display: grid;
@@ -1031,7 +1054,7 @@ input:disabled {
   font-size: 1rem;
 }
 
-.rail-metric {
+.focus-item {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1040,16 +1063,11 @@ input:disabled {
   padding: var(--space-3);
 }
 
-.rail-metric div:first-child {
-  display: grid;
-  gap: var(--space-1);
+.focus-item strong {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
 }
 
-.rail-metric strong {
-  font-size: 1.15rem;
-}
-
-.rail-meter,
 .assessment-meter {
   background: var(--neutral-bg);
   border-radius: 999px;
@@ -1057,7 +1075,6 @@ input:disabled {
   overflow: hidden;
 }
 
-.rail-meter span,
 .assessment-meter span {
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   display: block;
@@ -1087,6 +1104,73 @@ input:disabled {
 .readiness-statement p:last-child {
   color: var(--text-2);
   margin: var(--space-2) 0 0;
+}
+
+.review-next {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1fr);
+  padding: var(--space-4);
+}
+
+.review-next h2 {
+  font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+  line-height: 1.24;
+  margin: 0;
+}
+
+.review-next ol {
+  counter-reset: review-next;
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.review-next li {
+  align-items: start;
+  border-top: 1px solid var(--border);
+  counter-increment: review-next;
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: 30px minmax(0, 1fr);
+  padding-top: var(--space-2);
+}
+
+.review-next li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.review-next li::before {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 999px;
+  color: var(--accent);
+  content: counter(review-next);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.review-next li strong,
+.review-next li span {
+  grid-column: 2;
+}
+
+.review-next li span,
+.focus-item p {
+  color: var(--text-2);
+  line-height: 1.45;
+  margin: 0;
 }
 
 .assessment-tile {
@@ -1130,26 +1214,15 @@ input:disabled {
   font-size: 1.1rem;
 }
 
-.overview-evidence {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
-  padding: var(--space-4);
-}
-
-.overview-evidence p:last-child {
-  color: var(--text-2);
-  margin: 0;
-}
-
-.breakdown-grid,
-.evidence-grid {
+.breakdown-grid {
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.evidence-grid {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .breakdown-row {
@@ -1361,6 +1434,32 @@ input:disabled {
 .technical-details {
   display: grid;
   gap: var(--space-2);
+}
+
+.technical-provenance,
+.additional-limitations {
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.technical-provenance summary,
+.additional-limitations summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.technical-provenance div {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.technical-provenance code {
+  overflow-wrap: anywhere;
+  width: fit-content;
 }
 
 .action-details-toggle {
@@ -1590,11 +1689,11 @@ code {
     grid-template-columns: 150px minmax(0, 1fr);
   }
 
-  .assessment-rail {
+  .review-focus-panel {
     border-left: 0;
     border-top: 1px solid var(--border);
     grid-column: 1 / -1;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .rail-heading {
@@ -1606,7 +1705,6 @@ code {
   .assessment-row,
   .metric-grid,
   .breakdown-grid,
-  .evidence-grid,
   .skeleton-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1666,14 +1764,13 @@ code {
   .assessment-row,
   .metric-grid,
   .breakdown-grid,
-  .evidence-grid,
   .filter-bar,
   .filter-grid,
-  .overview-evidence,
+  .review-next,
   .detail-grid,
   .pull-meta,
   .skeleton-grid,
-  .assessment-rail {
+  .review-focus-panel {
     grid-template-columns: 1fr;
   }
 
@@ -1693,7 +1790,7 @@ code {
     border-bottom: 1px solid var(--border);
     border-right: 0;
     overflow-x: auto;
-    top: 60px;
+    top: 61px;
   }
 
   .report-tabs {
@@ -1747,7 +1844,7 @@ code {
   .pull-header,
   .card,
   .report-panel,
-  .assessment-rail {
+  .review-focus-panel {
     padding: var(--space-3);
   }
 

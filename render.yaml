@@ -2,32 +2,45 @@ services:
   - type: web
     name: mergesignal-backend
     runtime: python
+    plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+
       - key: MERGE_SIGNAL_ENVIRONMENT
         value: production
+
       - key: MERGE_SIGNAL_PROJECT_NAME
         value: MergeSignal
+
       - key: MERGE_SIGNAL_CORS_ORIGINS
         sync: false
+
       - key: GITHUB_API_BASE_URL
         value: https://api.github.com
+
       - key: GITHUB_TOKEN
         sync: false
+
       - key: GITHUB_REQUEST_TIMEOUT_SECONDS
         value: "10"
+
       - key: GITHUB_MAX_RETRIES
         value: "2"
+
       - key: GITHUB_RETRY_BASE_DELAY_SECONDS
         value: "0.25"
+
       - key: GITHUB_PER_PAGE
         value: "100"
+
       - key: GITHUB_MAX_PAGES
         value: "30"
+
       - key: GITHUB_USER_AGENT
         value: MergeSignal
